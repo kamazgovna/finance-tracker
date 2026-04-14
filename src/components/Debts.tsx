@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore, useSettingsStore } from '../store/useStore'
 import { Debt, DebtType, DEBT_TYPE_LABELS } from '../types'
-import { getDebtMetrics, calculateAmortization } from '../utils/calculations'
+import { getDebtMetrics, calculateAmortization, LumpSum } from '../utils/calculations'
 import { formatCurrency, formatMonths } from '../utils/formatters'
 import {
   Plus, Trash2, Edit2, ChevronDown, ChevronUp, Calculator, X, CreditCard, AlertTriangle, Banknote
@@ -123,14 +123,28 @@ function DebtForm({ initial, onSave, onClose }: {
 function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void }) {
   const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
+  const [mode, setMode] = useState<'monthly' | 'lump'>('monthly')
   const [extra, setExtra] = useState(0)
+  const [lumpAmount, setLumpAmount] = useState(0)
+  const [lumpMonth, setLumpMonth] = useState(1)
 
-  const rows = useMemo(() => calculateAmortization(debt, extra), [debt, extra])
+  const lumpSum: LumpSum | undefined = mode === 'lump' && lumpAmount > 0
+    ? { amount: lumpAmount, atMonth: lumpMonth }
+    : undefined
+
+  const rows = useMemo(
+    () => mode === 'monthly' ? calculateAmortization(debt, extra) : calculateAmortization(debt, 0, lumpSum),
+    [debt, extra, mode, lumpSum]
+  )
   const base = useMemo(() => getDebtMetrics(debt, 0), [debt])
-  const withExtra = useMemo(() => getDebtMetrics(debt, extra), [debt, extra])
+  const withChanges = useMemo(
+    () => mode === 'monthly' ? getDebtMetrics(debt, extra) : getDebtMetrics(debt, 0, lumpSum),
+    [debt, extra, mode, lumpSum]
+  )
 
-  const interestSaved = base.totalInterest - withExtra.totalInterest
-  const monthsSaved = base.monthsLeft - withExtra.monthsLeft
+  const interestSaved = base.totalInterest - withChanges.totalInterest
+  const monthsSaved = base.monthsLeft - withChanges.monthsLeft
+  const hasEffect = mode === 'monthly' ? extra > 0 : lumpAmount > 0
 
   return (
     <>
@@ -143,7 +157,6 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
       </div>
 
       <div className="p-5 space-y-4">
-        {/* Insufficient payment warning */}
         {base.insufficient && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
             <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
@@ -151,28 +164,59 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
               <p className="text-sm font-medium text-red-400">Платёж меньше процентов!</p>
               <p className="text-xs text-red-400/70 mt-0.5">
                 Минимум {formatCurrency(debt.remainingBalance * debt.interestRate / 100 / 12, sym)}/мес чтобы долг не рос.
-                Текущий платёж не покрывает проценты — долг увеличивается.
               </p>
             </div>
           </div>
         )}
 
-        {/* Extra payment calculator */}
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <label className="label flex items-center gap-2">
-            <Calculator className="w-3.5 h-3.5" /> Доп. платёж в месяц
-          </label>
-          <input
-            className="input"
-            type="number"
-            placeholder="0"
-            value={extra || ''}
-            onChange={e => setExtra(parseFloat(e.target.value) || 0)}
-          />
-          {extra > 0 && !withExtra.insufficient && (
-            <div className="mt-3 grid grid-cols-2 gap-3">
+        {/* Mode toggle */}
+        <div className="flex rounded-xl overflow-hidden border border-slate-700 text-sm font-medium">
+          <button
+            className={clsx('flex-1 py-2 transition-colors', mode === 'monthly'
+              ? 'bg-emerald-500/20 text-emerald-400'
+              : 'text-slate-400 hover:text-slate-200')}
+            onClick={() => setMode('monthly')}
+          >
+            + в месяц
+          </button>
+          <button
+            className={clsx('flex-1 py-2 transition-colors border-l border-slate-700', mode === 'lump'
+              ? 'bg-violet-500/20 text-violet-400'
+              : 'text-slate-400 hover:text-slate-200')}
+            onClick={() => setMode('lump')}
+          >
+            Единоразово
+          </button>
+        </div>
+
+        {/* Inputs */}
+        <div className="bg-slate-800/60 rounded-xl p-4 space-y-3">
+          {mode === 'monthly' ? (
+            <>
+              <label className="label flex items-center gap-2">
+                <Calculator className="w-3.5 h-3.5" /> Доп. платёж каждый месяц
+              </label>
+              <input className="input" type="number" placeholder="0"
+                value={extra || ''} onChange={e => setExtra(parseFloat(e.target.value) || 0)} />
+            </>
+          ) : (
+            <>
+              <label className="label flex items-center gap-2">
+                <Banknote className="w-3.5 h-3.5" /> Единоразовый платёж
+              </label>
+              <input className="input" type="number" placeholder="100 000"
+                value={lumpAmount || ''} onChange={e => setLumpAmount(parseFloat(e.target.value) || 0)} />
+              <label className="label">В каком месяце (от сегодня)</label>
+              <input className="input" type="number" placeholder="1" min={1}
+                value={lumpMonth} onChange={e => setLumpMonth(Math.max(1, parseInt(e.target.value) || 1))} />
+              <p className="text-xs text-slate-500">1 = в этом месяце, 2 = через месяц, и т.д.</p>
+            </>
+          )}
+
+          {hasEffect && !withChanges.insufficient && (
+            <div className="mt-1 grid grid-cols-2 gap-3">
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
-                <p className="text-xs text-emerald-400 font-medium">Сэкономлено %</p>
+                <p className="text-xs text-emerald-400 font-medium">Экономия на %</p>
                 <p className="text-lg font-bold text-emerald-400">{formatCurrency(interestSaved, sym)}</p>
               </div>
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
@@ -187,15 +231,15 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-xs text-slate-500 mb-1">Платежей</p>
-            <p className="font-bold text-slate-200">{formatMonths(withExtra.monthsLeft)}</p>
+            <p className="font-bold text-slate-200">{formatMonths(withChanges.monthsLeft)}</p>
           </div>
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-xs text-slate-500 mb-1">Переплата</p>
-            <p className="font-bold text-red-400">{formatCurrency(withExtra.overpayment, sym)}</p>
+            <p className="font-bold text-red-400">{formatCurrency(withChanges.overpayment, sym)}</p>
           </div>
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-xs text-slate-500 mb-1">Закроется</p>
-            <p className="font-bold text-slate-200">{withExtra.payoffDate}</p>
+            <p className="font-bold text-slate-200">{withChanges.payoffDate}</p>
           </div>
         </div>
 
@@ -213,11 +257,21 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={i} className={clsx('border-b border-slate-800/50', i % 2 === 0 ? '' : 'bg-slate-800/20')}>
-                  <td className="p-3 text-slate-400">{row.date}</td>
-                  <td className="p-3 text-right text-slate-200 font-medium">{formatCurrency(row.payment, sym)}</td>
+                <tr key={i} className={clsx(
+                  'border-b border-slate-800/50',
+                  row.isLumpSum
+                    ? 'bg-violet-500/10 border-violet-500/20'
+                    : i % 2 === 0 ? '' : 'bg-slate-800/20'
+                )}>
+                  <td className="p-3 text-slate-400">
+                    {row.date}
+                    {row.isLumpSum && <span className="ml-1.5 text-violet-400 font-semibold">← досрочный</span>}
+                  </td>
+                  <td className="p-3 text-right font-medium" style={{ color: row.isLumpSum ? '#a78bfa' : '#f1f5f9' }}>
+                    {formatCurrency(row.payment, sym)}
+                  </td>
                   <td className="p-3 text-right text-emerald-400">{formatCurrency(row.principal, sym)}</td>
-                  <td className="p-3 text-right text-red-400">{formatCurrency(row.interest, sym)}</td>
+                  <td className="p-3 text-right text-red-400">{row.isLumpSum ? '—' : formatCurrency(row.interest, sym)}</td>
                   <td className="p-3 text-right text-slate-300">{formatCurrency(row.balance, sym)}</td>
                 </tr>
               ))}

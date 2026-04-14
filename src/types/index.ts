@@ -71,6 +71,7 @@ export interface AmortizationRow {
   interest: number
   balance: number
   totalInterestPaid: number
+  isLumpSum?: boolean
 }
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
