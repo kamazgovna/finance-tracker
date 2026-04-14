@@ -108,6 +108,22 @@ export const INCOME_CATEGORY_LABELS: Record<IncomeCategory, string> = {
   other: 'Прочее',
 }
 
+export interface Budget {
+  id: string
+  category: ExpenseCategory
+  monthlyLimit: number
+}
+
+export interface Goal {
+  id: string
+  name: string
+  targetAmount: number
+  currentAmount: number
+  monthlyContribution: number
+  deadline?: string
+  color: string
+}
+
 export const DEBT_TYPE_LABELS: Record<DebtType, string> = {
   mortgage: 'Ипотека',
   car: 'Автокредит',

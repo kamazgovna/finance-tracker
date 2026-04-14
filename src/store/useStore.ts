@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '../lib/supabase'
-import { Debt, IncomeSource, Expense, Settings } from '../types'
+import { Debt, IncomeSource, Expense, Settings, Budget, Goal, ExpenseCategory } from '../types'
 
 // --- DB mappers ---
 
@@ -106,6 +106,8 @@ interface FinanceStore {
   debts: Debt[]
   income: IncomeSource[]
   expenses: Expense[]
+  budgets: Budget[]
+  goals: Goal[]
   loading: boolean
   initialized: boolean
 
@@ -122,26 +124,43 @@ interface FinanceStore {
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>
   updateExpense: (id: string, expense: Partial<Omit<Expense, 'id'>>) => Promise<void>
   deleteExpense: (id: string) => Promise<void>
+
+  setBudget: (category: ExpenseCategory, limit: number) => Promise<void>
+  deleteBudget: (id: string) => Promise<void>
+
+  addGoal: (goal: Omit<Goal, 'id'>) => Promise<void>
+  updateGoal: (id: string, goal: Partial<Omit<Goal, 'id'>>) => Promise<void>
+  deleteGoal: (id: string) => Promise<void>
 }
 
 export const useStore = create<FinanceStore>()((set, get) => ({
   debts: [],
   income: [],
   expenses: [],
+  budgets: [],
+  goals: [],
   loading: false,
   initialized: false,
 
   fetchAll: async () => {
     set({ loading: true })
-    const [debtsRes, incomeRes, expensesRes] = await Promise.all([
+    const [debtsRes, incomeRes, expensesRes, budgetsRes, goalsRes] = await Promise.all([
       supabase.from('finance_debts').select('*').order('created_at'),
       supabase.from('finance_income').select('*').order('created_at'),
       supabase.from('finance_expenses').select('*').order('created_at', { ascending: false }),
+      supabase.from('finance_budgets').select('*'),
+      supabase.from('finance_goals').select('*').order('created_at'),
     ])
     set({
       debts: (debtsRes.data ?? []).map(debtFromDB),
       income: (incomeRes.data ?? []).map(incomeFromDB),
       expenses: (expensesRes.data ?? []).map(expenseFromDB),
+      budgets: (budgetsRes.data ?? []).map((r) => ({ id: r.id, category: r.category, monthlyLimit: r.monthly_limit }) as Budget),
+      goals: (goalsRes.data ?? []).map((r) => ({
+        id: r.id, name: r.name, targetAmount: r.target_amount,
+        currentAmount: r.current_amount, monthlyContribution: r.monthly_contribution,
+        deadline: r.deadline, color: r.color,
+      }) as Goal),
       loading: false,
       initialized: true,
     })
@@ -199,5 +218,48 @@ export const useStore = create<FinanceStore>()((set, get) => ({
   deleteExpense: async (id) => {
     const { error } = await supabase.from('finance_expenses').delete().eq('id', id)
     if (!error) set((s) => ({ expenses: s.expenses.filter(e => e.id !== id) }))
+  },
+
+  // Budgets
+  setBudget: async (category, limit) => {
+    const existing = get().budgets.find(b => b.category === category)
+    if (existing) {
+      const { error } = await supabase.from('finance_budgets').update({ monthly_limit: limit }).eq('id', existing.id)
+      if (!error) set((s) => ({ budgets: s.budgets.map(b => b.category === category ? { ...b, monthlyLimit: limit } : b) }))
+    } else {
+      const { data, error } = await supabase.from('finance_budgets').insert({ category, monthly_limit: limit }).select().single()
+      if (!error && data) set((s) => ({ budgets: [...s.budgets, { id: data.id, category, monthlyLimit: limit }] }))
+    }
+  },
+  deleteBudget: async (id) => {
+    const { error } = await supabase.from('finance_budgets').delete().eq('id', id)
+    if (!error) set((s) => ({ budgets: s.budgets.filter(b => b.id !== id) }))
+  },
+
+  // Goals
+  addGoal: async (goal) => {
+    const { data, error } = await supabase.from('finance_goals').insert({
+      name: goal.name, target_amount: goal.targetAmount, current_amount: goal.currentAmount,
+      monthly_contribution: goal.monthlyContribution, deadline: goal.deadline, color: goal.color,
+    }).select().single()
+    if (!error && data) set((s) => ({ goals: [...s.goals, {
+      id: data.id, name: data.name, targetAmount: data.target_amount,
+      currentAmount: data.current_amount, monthlyContribution: data.monthly_contribution,
+      deadline: data.deadline, color: data.color,
+    }] }))
+  },
+  updateGoal: async (id, goal) => {
+    const current = get().goals.find(g => g.id === id)
+    if (!current) return
+    const merged = { ...current, ...goal }
+    const { error } = await supabase.from('finance_goals').update({
+      name: merged.name, target_amount: merged.targetAmount, current_amount: merged.currentAmount,
+      monthly_contribution: merged.monthlyContribution, deadline: merged.deadline, color: merged.color,
+    }).eq('id', id)
+    if (!error) set((s) => ({ goals: s.goals.map(g => g.id === id ? { ...g, ...goal } : g) }))
+  },
+  deleteGoal: async (id) => {
+    const { error } = await supabase.from('finance_goals').delete().eq('id', id)
+    if (!error) set((s) => ({ goals: s.goals.filter(g => g.id !== id) }))
   },
 }))

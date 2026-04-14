@@ -1,7 +1,8 @@
 import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
-  LayoutDashboard, CreditCard, TrendingUp, ShoppingCart, Settings, Menu, X, DollarSign, LogOut, Loader2
+  LayoutDashboard, CreditCard, TrendingUp, ShoppingCart, Settings,
+  Menu, X, DollarSign, LogOut, Loader2, PiggyBank, Target
 } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { useStore } from './store/useStore'
@@ -9,6 +10,8 @@ import Dashboard from './components/Dashboard'
 import Debts from './components/Debts'
 import Income from './components/Income'
 import Expenses from './components/Expenses'
+import Budgets from './components/Budgets'
+import Goals from './components/Goals'
 import SettingsPage from './components/SettingsPage'
 import LoginPage from './components/LoginPage'
 import clsx from 'clsx'
@@ -18,6 +21,8 @@ const navItems = [
   { to: '/debts', icon: CreditCard, label: 'Долги' },
   { to: '/income', icon: TrendingUp, label: 'Доходы' },
   { to: '/expenses', icon: ShoppingCart, label: 'Расходы' },
+  { to: '/budgets', icon: PiggyBank, label: 'Бюджет' },
+  { to: '/goals', icon: Target, label: 'Цели' },
   { to: '/settings', icon: Settings, label: 'Настройки' },
 ]
 
@@ -135,6 +140,8 @@ function AppContent() {
             <Route path="/debts" element={<Debts />} />
             <Route path="/income" element={<Income />} />
             <Route path="/expenses" element={<Expenses />} />
+            <Route path="/budgets" element={<Budgets />} />
+            <Route path="/goals" element={<Goals />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>

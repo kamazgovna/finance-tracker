@@ -3,7 +3,9 @@ import { useStore, useSettingsStore } from '../store/useStore'
 import {
   Expense, ExpenseCategory, EXPENSE_CATEGORY_LABELS, EXPENSE_CATEGORY_COLORS
 } from '../types'
-import { getMonthlyExpensesTotal } from '../utils/calculations'
+import { getExpensesForMonth, getExpensesForMonthByCategory, filterExpensesForMonth } from '../utils/calculations'
+import { useMonthStore } from '../store/useMonthStore'
+import MonthSelector from './MonthSelector'
 import { formatCurrency } from '../utils/formatters'
 import { Plus, Trash2, Edit2, X, ShoppingCart, RefreshCw, Clock } from 'lucide-react'
 import { format } from 'date-fns'
@@ -127,43 +129,36 @@ function ExpenseForm({ initial, onSave, onClose }: {
 export default function Expenses() {
   const { expenses, addExpense, updateExpense, deleteExpense } = useStore()
   const { settings } = useSettingsStore()
+  const { selectedMonth } = useMonthStore()
   const sym = settings.currencySymbol
   const [addOpen, setAddOpen] = useState(false)
   const [editItem, setEditItem] = useState<Expense | null>(null)
   const [filter, setFilter] = useState<'all' | 'recurring' | 'oneTime'>('all')
 
-  const monthlyTotal = useMemo(() => getMonthlyExpensesTotal(expenses), [expenses])
+  const monthlyTotal = useMemo(() => getExpensesForMonth(expenses, selectedMonth), [expenses, selectedMonth])
 
   const byCategory = useMemo(() => {
+    const byCat = getExpensesForMonthByCategory(expenses, selectedMonth)
     const map: Record<string, { label: string; total: number; color: string; count: number }> = {}
-    expenses.forEach(e => {
-      const monthly = e.recurring
-        ? e.frequency === 'weekly' ? e.amount * 4.33
-        : e.frequency === 'yearly' ? e.amount / 12
-        : e.amount
-        : e.amount
-      const cat = e.category
-      if (!map[cat]) {
-        map[cat] = {
-          label: EXPENSE_CATEGORY_LABELS[cat],
-          total: 0,
-          color: EXPENSE_CATEGORY_COLORS[cat],
-          count: 0,
-        }
+    Object.entries(byCat).forEach(([cat, total]) => {
+      const matching = expenses.filter(e => e.category === cat)
+      map[cat] = {
+        label: EXPENSE_CATEGORY_LABELS[cat as ExpenseCategory] ?? cat,
+        total,
+        color: EXPENSE_CATEGORY_COLORS[cat as ExpenseCategory] ?? '#6b7280',
+        count: matching.length,
       }
-      map[cat].total += monthly
-      map[cat].count++
     })
     return Object.entries(map).sort((a, b) => b[1].total - a[1].total)
-  }, [expenses])
+  }, [expenses, selectedMonth])
 
   const filtered = useMemo(() => {
-    if (filter === 'recurring') return expenses.filter(e => e.recurring)
-    if (filter === 'oneTime') return expenses.filter(e => !e.recurring)
-    return expenses
-  }, [expenses, filter])
+    const forMonth = filterExpensesForMonth(expenses, selectedMonth)
+    if (filter === 'recurring') return forMonth.filter(e => e.recurring)
+    if (filter === 'oneTime') return forMonth.filter(e => !e.recurring)
+    return forMonth
+  }, [expenses, selectedMonth, filter])
 
-  // Sort by date desc
   const sorted = useMemo(
     () => [...filtered].sort((a, b) => b.date.localeCompare(a.date)),
     [filtered]
@@ -181,22 +176,25 @@ export default function Expenses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Расходы</h1>
           <p className="text-slate-400 text-sm mt-1">Всё, куда уходят деньги</p>
         </div>
-        <button className="btn-primary flex items-center gap-2 shrink-0" onClick={() => setAddOpen(true)}>
-          <Plus className="w-4 h-4" /> Добавить
-        </button>
+        <div className="flex items-center gap-3">
+          <MonthSelector />
+          <button className="btn-primary flex items-center gap-2 shrink-0" onClick={() => setAddOpen(true)}>
+            <Plus className="w-4 h-4" /> Добавить
+          </button>
+        </div>
       </div>
 
       {/* Totals */}
       <div className="grid grid-cols-2 gap-4">
         <div className="card bg-gradient-to-br from-red-500/10 to-slate-900 border-red-500/20">
-          <p className="text-xs text-red-400 font-medium uppercase tracking-wider mb-2">Всего в месяц</p>
+          <p className="text-xs text-red-400 font-medium uppercase tracking-wider mb-2">За месяц</p>
           <p className="text-3xl font-black text-red-400">{formatCurrency(monthlyTotal, sym)}</p>
-          <p className="text-xs text-slate-500 mt-1">{expenses.length} {expenses.length === 1 ? 'запись' : expenses.length < 5 ? 'записи' : 'записей'}</p>
+          <p className="text-xs text-slate-500 mt-1">{filtered.length} {filtered.length === 1 ? 'запись' : filtered.length < 5 ? 'записи' : 'записей'}</p>
         </div>
         <div className="card">
           <p className="text-xs text-amber-400 font-medium uppercase tracking-wider mb-2">Регулярные</p>

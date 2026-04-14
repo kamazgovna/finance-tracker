@@ -1,33 +1,28 @@
 import { useMemo } from 'react'
 import { useStore, useSettingsStore } from '../store/useStore'
+import { useMonthStore } from '../store/useMonthStore'
 import {
-  getMonthlyIncomeTotal,
-  getMonthlyExpensesTotal,
-  getTotalDebt,
-  getMonthlyDebtPayments,
-  getExpensesByCategory,
+  getMonthlyIncomeTotal, getMonthlyDebtPayments, getTotalDebt,
+  getExpensesForMonth, getExpensesForMonthByCategory,
+  get6MonthChartData, getUserBreakdown, getFreeMoneyAfterObligations,
 } from '../utils/calculations'
 import { formatCurrency } from '../utils/formatters'
 import {
   TrendingUp, TrendingDown, CreditCard, Wallet,
-  AlertCircle, CheckCircle2, ArrowRight
+  AlertCircle, CheckCircle2, ArrowRight, Smile
 } from 'lucide-react'
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, Legend
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  BarChart, Bar, XAxis, YAxis, Legend, ReferenceLine,
 } from 'recharts'
 import { EXPENSE_CATEGORY_COLORS, EXPENSE_CATEGORY_LABELS } from '../types'
 import { Link } from 'react-router-dom'
+import MonthSelector from './MonthSelector'
 import clsx from 'clsx'
 
-function MetricCard({
-  label, value, sub, icon: Icon, color, trend
-}: {
-  label: string
-  value: string
-  sub?: string
-  icon: React.ElementType
-  color: 'green' | 'red' | 'blue' | 'yellow' | 'purple'
-  trend?: 'up' | 'down' | 'neutral'
+function MetricCard({ label, value, sub, icon: Icon, color }: {
+  label: string; value: string; sub?: string
+  icon: React.ElementType; color: 'green' | 'red' | 'blue' | 'yellow' | 'purple'
 }) {
   const colorMap = {
     green: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
@@ -53,47 +48,39 @@ function MetricCard({
 }
 
 const RADIAN = Math.PI / 180
-function CustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) {
-  if (percent < 0.05) return null
+function PieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) {
+  if (percent < 0.06) return null
   const r = innerRadius + (outerRadius - innerRadius) * 0.5
   const x = cx + r * Math.cos(-midAngle * RADIAN)
   const y = cy + r * Math.sin(-midAngle * RADIAN)
-  return (
-    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>
-      {`${(percent * 100).toFixed(0)}%`}
-    </text>
-  )
+  return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>{`${(percent * 100).toFixed(0)}%`}</text>
 }
 
 export default function Dashboard() {
   const { debts, income, expenses } = useStore()
   const { settings } = useSettingsStore()
+  const { selectedMonth } = useMonthStore()
   const sym = settings.currencySymbol
 
   const monthlyIncome = useMemo(() => getMonthlyIncomeTotal(income), [income])
-  const monthlyExpenses = useMemo(() => getMonthlyExpensesTotal(expenses), [expenses])
+  const monthlyExpenses = useMemo(() => getExpensesForMonth(expenses, selectedMonth), [expenses, selectedMonth])
   const totalDebt = useMemo(() => getTotalDebt(debts), [debts])
   const monthlyDebtPayments = useMemo(() => getMonthlyDebtPayments(debts), [debts])
-  const cashFlow = monthlyIncome - monthlyExpenses - monthlyDebtPayments
+  const freeMoney = useMemo(() => getFreeMoneyAfterObligations(income, expenses, debts, selectedMonth), [income, expenses, debts, selectedMonth])
 
   const expensesByCategory = useMemo(() => {
-    const byCat = getExpensesByCategory(expenses)
+    const byCat = getExpensesForMonthByCategory(expenses, selectedMonth)
     return Object.entries(byCat).map(([cat, amount]) => ({
       name: EXPENSE_CATEGORY_LABELS[cat as keyof typeof EXPENSE_CATEGORY_LABELS] ?? cat,
-      value: amount,
-      color: EXPENSE_CATEGORY_COLORS[cat as keyof typeof EXPENSE_CATEGORY_COLORS] ?? '#6b7280',
-      category: cat,
+      value: amount, color: EXPENSE_CATEGORY_COLORS[cat as keyof typeof EXPENSE_CATEGORY_COLORS] ?? '#6b7280', category: cat,
     })).filter(e => e.value > 0).sort((a, b) => b.value - a.value)
-  }, [expenses])
+  }, [expenses, selectedMonth])
 
-  const totalMonthlyOut = monthlyExpenses + monthlyDebtPayments
+  const chartData = useMemo(() => get6MonthChartData(expenses, income, debts), [expenses, income, debts])
 
-  // Bar chart data — income vs expenses breakdown
-  const barData = [
-    { name: 'Доходы', value: monthlyIncome, fill: '#10b981' },
-    { name: 'Расходы', value: monthlyExpenses, fill: '#f59e0b' },
-    { name: 'Долги', value: monthlyDebtPayments, fill: '#ef4444' },
-  ]
+  const userBreakdown = useMemo(() => getUserBreakdown(expenses, selectedMonth), [expenses, selectedMonth])
+  const userBreakdownEntries = Object.entries(userBreakdown).sort((a, b) => b[1] - a[1])
+  const userColors: Record<string, string> = { 'Крис': '#3b82f6', 'Юля': '#ec4899' }
 
   const isEmpty = debts.length === 0 && income.length === 0 && expenses.length === 0
 
@@ -105,20 +92,12 @@ export default function Dashboard() {
         </div>
         <div>
           <h2 className="text-2xl font-bold text-slate-100 mb-2">Добро пожаловать!</h2>
-          <p className="text-slate-400 max-w-sm">
-            Начни добавлять свои доходы, расходы и долги — и здесь появится полная картина твоих финансов.
-          </p>
+          <p className="text-slate-400 max-w-sm">Начни добавлять доходы, расходы и долги — здесь появится полная картина финансов.</p>
         </div>
         <div className="flex flex-wrap gap-3 justify-center">
-          <Link to="/income" className="btn-primary flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" /> Добавить доход
-          </Link>
-          <Link to="/expenses" className="btn-secondary flex items-center gap-2">
-            <TrendingDown className="w-4 h-4" /> Добавить расход
-          </Link>
-          <Link to="/debts" className="btn-secondary flex items-center gap-2">
-            <CreditCard className="w-4 h-4" /> Добавить долг
-          </Link>
+          <Link to="/income" className="btn-primary flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Доход</Link>
+          <Link to="/expenses" className="btn-secondary flex items-center gap-2"><TrendingDown className="w-4 h-4" /> Расход</Link>
+          <Link to="/debts" className="btn-secondary flex items-center gap-2"><CreditCard className="w-4 h-4" /> Долг</Link>
         </div>
       </div>
     )
@@ -127,94 +106,78 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Дашборд</h1>
-        <p className="text-slate-400 text-sm mt-1">Общая картина твоих финансов</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Дашборд</h1>
+          <p className="text-slate-400 text-sm mt-0.5">Общая картина финансов</p>
+        </div>
+        <MonthSelector />
       </div>
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Доход / мес"
-          value={formatCurrency(monthlyIncome, sym)}
-          icon={TrendingUp}
-          color="green"
-        />
+        <MetricCard label="Доход / мес" value={formatCurrency(monthlyIncome, sym)} icon={TrendingUp} color="green" />
         <MetricCard
           label="Расходы / мес"
-          value={formatCurrency(totalMonthlyOut, sym)}
+          value={formatCurrency(monthlyExpenses + monthlyDebtPayments, sym)}
           sub={`+${formatCurrency(monthlyDebtPayments, sym)} долги`}
-          icon={TrendingDown}
-          color="red"
+          icon={TrendingDown} color="red"
         />
         <MetricCard
-          label="Свободно / мес"
-          value={formatCurrency(cashFlow, sym)}
-          sub={cashFlow >= 0 ? 'Положительный поток' : 'Дефицит!'}
-          icon={cashFlow >= 0 ? CheckCircle2 : AlertCircle}
-          color={cashFlow >= 0 ? 'green' : 'red'}
+          label="Свободно"
+          value={formatCurrency(freeMoney, sym)}
+          sub={freeMoney >= 0 ? 'После всех трат' : 'Дефицит!'}
+          icon={freeMoney >= 0 ? CheckCircle2 : AlertCircle}
+          color={freeMoney >= 0 ? 'green' : 'red'}
         />
         <MetricCard
           label="Долги всего"
           value={formatCurrency(totalDebt, sym)}
-          sub={`${debts.length} ${debts.length === 1 ? 'кредит' : debts.length < 5 ? 'кредита' : 'кредитов'}`}
-          icon={CreditCard}
-          color="yellow"
+          sub={`${formatCurrency(monthlyDebtPayments, sym)}/мес`}
+          icon={CreditCard} color="yellow"
         />
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar chart */}
-        <div className="card">
-          <h3 className="font-semibold text-slate-200 mb-4">Денежный поток</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={barData} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false}
-                tickFormatter={(v) => `${(v / 1000).toFixed(0)}к`} />
-              <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, color: '#f1f5f9' }}
-                formatter={(v: number) => [formatCurrency(v, sym), '']}
-                labelStyle={{ color: '#94a3b8' }}
-              />
-              <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                {barData.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {/* 6-month chart */}
+      <div className="card">
+        <h3 className="font-semibold text-slate-200 mb-4">Тренд — 6 месяцев</h3>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={chartData} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
+            <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false}
+              tickFormatter={(v) => `${(v / 1000).toFixed(0)}к`} />
+            <Tooltip
+              contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, color: '#f1f5f9' }}
+              formatter={(v: number, name: string) => [formatCurrency(v, sym), name]}
+              labelStyle={{ color: '#94a3b8', marginBottom: 4 }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+            <ReferenceLine y={0} stroke="#334155" />
+            <Bar dataKey="income" name="Доход" fill="#10b981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="expenses" name="Расходы" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="debts" name="Долги" fill="#ef4444" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
 
-        {/* Pie chart */}
+      {/* Pie + user breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Pie */}
         <div className="card">
           <h3 className="font-semibold text-slate-200 mb-4">Расходы по категориям</h3>
           {expensesByCategory.length > 0 ? (
             <div className="flex items-center gap-4">
               <ResponsiveContainer width="55%" height={200}>
                 <PieChart>
-                  <Pie
-                    data={expensesByCategory}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    dataKey="value"
-                    labelLine={false}
-                    label={CustomLabel}
-                  >
-                    {expensesByCategory.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.color} />
-                    ))}
+                  <Pie data={expensesByCategory} cx="50%" cy="50%" outerRadius={90} dataKey="value" labelLine={false} label={PieLabel}>
+                    {expensesByCategory.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, color: '#f1f5f9' }}
-                    formatter={(v: number) => [formatCurrency(v, sym), '']}
-                  />
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, color: '#f1f5f9' }}
+                    formatter={(v: number) => [formatCurrency(v, sym), '']} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex-1 space-y-1.5 overflow-hidden">
-                {expensesByCategory.slice(0, 6).map((e) => (
+                {expensesByCategory.slice(0, 6).map(e => (
                   <div key={e.category} className="flex items-center gap-2 text-xs">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: e.color }} />
                     <span className="text-slate-400 truncate flex-1">{e.name}</span>
@@ -224,8 +187,43 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
+            <div className="flex items-center justify-center h-40 text-slate-500 text-sm">Нет расходов за этот месяц</div>
+          )}
+        </div>
+
+        {/* User breakdown */}
+        <div className="card">
+          <h3 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
+            <Smile className="w-4 h-4 text-slate-400" /> Кто сколько потратил
+          </h3>
+          {userBreakdownEntries.length > 0 ? (
+            <div className="space-y-4">
+              {userBreakdownEntries.map(([name, amount]) => {
+                const total = userBreakdownEntries.reduce((s, [, v]) => s + v, 0)
+                const pct = total > 0 ? (amount / total) * 100 : 0
+                const color = userColors[name] ?? '#6b7280'
+                return (
+                  <div key={name}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="font-medium" style={{ color }}>{name}</span>
+                      <span className="text-slate-300 font-semibold">{formatCurrency(amount, sym)}
+                        <span className="text-slate-500 font-normal ml-1">({pct.toFixed(0)}%)</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2">
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="pt-2 border-t border-slate-800 flex justify-between text-xs text-slate-500">
+                <span>Итого расходов</span>
+                <span className="font-medium text-slate-300">{formatCurrency(userBreakdownEntries.reduce((s, [, v]) => s + v, 0), sym)}</span>
+              </div>
+            </div>
+          ) : (
             <div className="flex items-center justify-center h-40 text-slate-500 text-sm">
-              Нет данных по расходам
+              Нет данных — добавляйте расходы с аккаунтов
             </div>
           )}
         </div>
@@ -237,11 +235,11 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-slate-200">Долги</h3>
             <Link to="/debts" className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
-              Все долги <ArrowRight className="w-3 h-3" />
+              Все <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           <div className="space-y-3">
-            {debts.slice(0, 4).map((debt) => {
+            {debts.slice(0, 4).map(debt => {
               const pct = debt.totalAmount > 0 ? (1 - debt.remainingBalance / debt.totalAmount) * 100 : 0
               return (
                 <div key={debt.id} className="bg-slate-800/50 rounded-xl p-3">
@@ -256,10 +254,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="w-full bg-slate-700 rounded-full h-1.5">
-                    <div
-                      className="bg-emerald-500 h-1.5 rounded-full transition-all"
-                      style={{ width: `${Math.min(pct, 100)}%` }}
-                    />
+                    <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                   <p className="text-xs text-slate-500 mt-1">{pct.toFixed(0)}% выплачено</p>
                 </div>
