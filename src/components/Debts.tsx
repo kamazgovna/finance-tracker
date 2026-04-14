@@ -4,7 +4,7 @@ import { Debt, DebtType, DEBT_TYPE_LABELS } from '../types'
 import { getDebtMetrics, calculateAmortization } from '../utils/calculations'
 import { formatCurrency, formatMonths } from '../utils/formatters'
 import {
-  Plus, Trash2, Edit2, ChevronDown, ChevronUp, Calculator, X, CreditCard, AlertTriangle
+  Plus, Trash2, Edit2, ChevronDown, ChevronUp, Calculator, X, CreditCard, AlertTriangle, Banknote
 } from 'lucide-react'
 import { isPaymentSufficient } from '../utils/calculations'
 import clsx from 'clsx'
@@ -21,6 +21,8 @@ const emptyForm: Omit<Debt, 'id'> = {
   interestRate: 0,
   monthlyPayment: 0,
   startDate: new Date().toISOString().split('T')[0],
+  endDate: '',
+  originalTermMonths: undefined,
   notes: '',
 }
 
@@ -89,6 +91,17 @@ function DebtForm({ initial, onSave, onClose }: {
             <label className="label">Дата начала</label>
             <input className="input" type="date" value={form.startDate}
               onChange={e => set('startDate', e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Дата окончания договора</label>
+            <input className="input" type="date" value={form.endDate || ''}
+              onChange={e => set('endDate', e.target.value || undefined)} />
+          </div>
+          <div>
+            <label className="label">Срок договора (мес.)</label>
+            <input className="input" type="number" placeholder="60"
+              value={form.originalTermMonths || ''}
+              onChange={e => set('originalTermMonths', parseInt(e.target.value) || undefined)} />
           </div>
           <div className="col-span-2">
             <label className="label">Заметки (необязательно)</label>
@@ -216,6 +229,73 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
   )
 }
 
+function EarlyPaymentModal({ debt, onClose }: { debt: Debt; onClose: () => void }) {
+  const { updateDebt } = useStore()
+  const { settings } = useSettingsStore()
+  const sym = settings.currencySymbol
+  const [amount, setAmount] = useState(0)
+  const [saving, setSaving] = useState(false)
+
+  const newBalance = Math.max(0, debt.remainingBalance - amount)
+  const valid = amount > 0 && amount <= debt.remainingBalance
+
+  const handleConfirm = async () => {
+    if (!valid) return
+    setSaving(true)
+    await updateDebt(debt.id, { remainingBalance: newBalance })
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between p-5 border-b border-slate-800">
+        <div>
+          <h3 className="font-semibold text-slate-100">Досрочный платёж</h3>
+          <p className="text-xs text-slate-400 mt-0.5">{debt.name}</p>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X className="w-5 h-5" /></button>
+      </div>
+      <div className="p-5 space-y-4">
+        <div className="bg-slate-800/50 rounded-xl p-3 flex justify-between text-sm">
+          <span className="text-slate-400">Текущий остаток</span>
+          <span className="font-semibold text-slate-200">{formatCurrency(debt.remainingBalance, sym)}</span>
+        </div>
+        <div>
+          <label className="label">Сумма досрочного платежа</label>
+          <input
+            className="input"
+            type="number"
+            placeholder="50 000"
+            value={amount || ''}
+            onChange={e => setAmount(parseFloat(e.target.value) || 0)}
+          />
+        </div>
+        {amount > 0 && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex justify-between text-sm">
+            <span className="text-emerald-400">Остаток после платежа</span>
+            <span className="font-bold text-emerald-400">{formatCurrency(newBalance, sym)}</span>
+          </div>
+        )}
+        {amount > debt.remainingBalance && (
+          <p className="text-xs text-red-400">Сумма превышает остаток долга</p>
+        )}
+      </div>
+      <div className="flex gap-3 p-5 border-t border-slate-800">
+        <button className="btn-secondary flex-1" onClick={onClose}>Отмена</button>
+        <button
+          className="btn-primary flex-1 flex items-center justify-center gap-2"
+          disabled={!valid || saving}
+          onClick={handleConfirm}
+        >
+          {saving && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+          Применить
+        </button>
+      </div>
+    </>
+  )
+}
+
 function DebtCard({ debt }: { debt: Debt }) {
   const { deleteDebt, updateDebt } = useStore()
   const { settings } = useSettingsStore()
@@ -223,10 +303,20 @@ function DebtCard({ debt }: { debt: Debt }) {
   const [expanded, setExpanded] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [amortOpen, setAmortOpen] = useState(false)
+  const [earlyPayOpen, setEarlyPayOpen] = useState(false)
 
   const metrics = useMemo(() => getDebtMetrics(debt), [debt])
   const pct = debt.totalAmount > 0 ? (1 - debt.remainingBalance / debt.totalAmount) * 100 : 0
   const paymentOk = useMemo(() => isPaymentSufficient(debt), [debt])
+
+  // Remaining months based on contract end date
+  const contractMonthsLeft = useMemo(() => {
+    if (!debt.endDate) return null
+    const end = new Date(debt.endDate)
+    const now = new Date()
+    const months = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth())
+    return Math.max(0, months)
+  }, [debt.endDate])
 
   return (
     <>
@@ -249,6 +339,13 @@ function DebtCard({ debt }: { debt: Debt }) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               className="text-slate-400 hover:text-emerald-400 transition-colors"
+              onClick={() => setEarlyPayOpen(true)}
+              title="Досрочный платёж"
+            >
+              <Banknote className="w-4 h-4" />
+            </button>
+            <button
+              className="text-slate-400 hover:text-violet-400 transition-colors"
               onClick={() => setAmortOpen(true)}
               title="График погашения"
             >
@@ -310,7 +407,7 @@ function DebtCard({ debt }: { debt: Debt }) {
         </button>
 
         {expanded && (
-          <div className="mt-2 pt-3 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
+          <div className="mt-2 pt-3 border-t border-slate-800 space-y-1.5 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-500">Изначальная сумма:</span>
               <span className="text-slate-300 font-medium">{formatCurrency(debt.totalAmount, sym)}</span>
@@ -319,17 +416,55 @@ function DebtCard({ debt }: { debt: Debt }) {
               <span className="text-slate-500">Ставка:</span>
               <span className="text-slate-300 font-medium">{debt.interestRate}% год.</span>
             </div>
+            {debt.startDate && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Начало кредита:</span>
+                <span className="text-slate-300 font-medium">{debt.startDate}</span>
+              </div>
+            )}
+            {debt.endDate && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Дата окончания по договору:</span>
+                <span className="text-amber-400 font-medium">{debt.endDate}</span>
+              </div>
+            )}
+            {contractMonthsLeft !== null && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">По договору осталось:</span>
+                <span className="text-amber-400 font-medium">{formatMonths(contractMonthsLeft)}</span>
+              </div>
+            )}
+            {debt.originalTermMonths && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Срок по договору:</span>
+                <span className="text-slate-300 font-medium">{formatMonths(debt.originalTermMonths)}</span>
+              </div>
+            )}
             <div className="flex justify-between">
-              <span className="text-slate-500">Ост. месяцев:</span>
-              <span className="text-slate-300 font-medium">{formatMonths(metrics.monthsLeft)}</span>
+              <span className="text-slate-500">Закроется (расчёт):</span>
+              <span className="text-emerald-400 font-medium">{metrics.payoffDate}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Осталось (расчёт):</span>
+              <span className="text-emerald-400 font-medium">{formatMonths(metrics.monthsLeft)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Всего выплатить:</span>
               <span className="text-slate-300 font-medium">{formatCurrency(metrics.totalPaid, sym)}</span>
             </div>
+            {contractMonthsLeft !== null && contractMonthsLeft > metrics.monthsLeft && (
+              <div className="mt-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 text-emerald-400">
+                Математически закроется на <strong>{formatMonths(contractMonthsLeft - metrics.monthsLeft)}</strong> раньше срока — платёж выше минимального
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Early payment modal */}
+      <Modal open={earlyPayOpen} onClose={() => setEarlyPayOpen(false)}>
+        <EarlyPaymentModal debt={debt} onClose={() => setEarlyPayOpen(false)} />
+      </Modal>
 
       {/* Edit modal */}
       <Modal open={editOpen} onClose={() => setEditOpen(false)}>

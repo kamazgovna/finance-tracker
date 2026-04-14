@@ -21,7 +21,7 @@ function toMonthly(amount: number, freq: Frequency): number {
     case 'biweekly': return amount * 2.17
     case 'quarterly': return amount / 3
     case 'yearly': return amount / 12
-    case 'oneTime': return 0
+    case 'oneTime': return amount
   }
 }
 
@@ -33,6 +33,7 @@ const emptyForm: Omit<IncomeSource, 'id'> = {
   amount: 0,
   frequency: 'monthly',
   category: 'salary',
+  date: new Date().toISOString().split('T')[0],
   notes: '',
 }
 
@@ -89,6 +90,11 @@ function IncomeForm({ initial, onSave, onClose }: {
           </select>
         </div>
         <div>
+          <label className="label">{form.frequency === 'oneTime' ? 'Дата получения' : 'С какого месяца'}</label>
+          <input className="input" type="date" value={form.date || ''}
+            onChange={e => set('date', e.target.value)} />
+        </div>
+        <div>
           <label className="label">Заметки</label>
           <input className="input" placeholder="..." value={form.notes || ''}
             onChange={e => set('notes', e.target.value)} />
@@ -120,7 +126,7 @@ export default function Income() {
   const [addOpen, setAddOpen] = useState(false)
   const [editItem, setEditItem] = useState<IncomeSource | null>(null)
 
-  const monthlyTotal = useMemo(() => getMonthlyIncomeTotal(income), [income])
+  const monthlyTotal = useMemo(() => income.reduce((s, src) => s + toMonthly(src.amount, src.frequency), 0), [income])
 
   // Group by category
   const byCategory = useMemo(() => {
@@ -153,7 +159,7 @@ export default function Income() {
 
       {/* Total */}
       <div className="card bg-gradient-to-br from-emerald-500/10 to-slate-900 border-emerald-500/20">
-        <p className="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-2">Итого в месяц</p>
+        <p className="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-2">Итого поступлений</p>
         <p className="text-4xl font-black text-emerald-400">{formatCurrency(monthlyTotal, sym)}</p>
         <p className="text-xs text-slate-500 mt-1">{income.length} {income.length === 1 ? 'источник' : income.length < 5 ? 'источника' : 'источников'}</p>
       </div>
@@ -222,7 +228,7 @@ export default function Income() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="font-bold text-emerald-400">{formatCurrency(source.amount, sym)}</p>
-                  {source.frequency !== 'monthly' && (
+                  {source.frequency !== 'monthly' && source.frequency !== 'oneTime' && (
                     <p className="text-xs text-slate-500">{formatCurrency(monthly, sym)}/мес</p>
                   )}
                   {source.createdByName && (

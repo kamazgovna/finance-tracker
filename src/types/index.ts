@@ -24,6 +24,8 @@ export interface Debt {
   interestRate: number // Annual % (APR)
   monthlyPayment: number
   startDate: string
+  endDate?: string          // Contract end date (from agreement)
+  originalTermMonths?: number // Original term in months (e.g. 60 for 5 years)
   notes?: string
   createdBy?: string
   createdByName?: string

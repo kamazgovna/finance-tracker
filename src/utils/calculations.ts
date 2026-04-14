@@ -67,6 +67,35 @@ export function getMonthlyIncomeTotal(sources: IncomeSource[]): number {
   }, 0)
 }
 
+// Income total for a specific month, respecting start dates and one-time entries
+export function getMonthlyIncomeTotalForMonth(sources: IncomeSource[], month: Date): number {
+  const monthStart = startOfMonth(month)
+  const currentMonthStart = startOfMonth(new Date())
+  return sources.reduce((sum, s) => {
+    if (s.date) {
+      const srcDate = parseISO(s.date)
+      if (s.frequency === 'oneTime') {
+        // One-time: only count in the exact month it was received
+        return isSameMonth(srcDate, month) ? sum + s.amount : sum
+      }
+      // Recurring: only count if it started on or before this month
+      if (startOfMonth(srcDate) > monthStart) return sum
+    } else {
+      // No date set: only count from current month onwards (no history)
+      if (monthStart < currentMonthStart) return sum
+      if (s.frequency === 'oneTime') return sum
+    }
+    switch (s.frequency) {
+      case 'monthly': return sum + s.amount
+      case 'weekly': return sum + s.amount * 4.33
+      case 'biweekly': return sum + s.amount * 2.17
+      case 'quarterly': return sum + s.amount / 3
+      case 'yearly': return sum + s.amount / 12
+      default: return sum
+    }
+  }, 0)
+}
+
 export function getExpensesForMonth(expenses: Expense[], month: Date): number {
   return expenses.reduce((sum, e) => {
     if (e.recurring) {
@@ -123,19 +152,19 @@ export function filterExpensesForMonth(expenses: Expense[], month: Date): Expens
 }
 
 export function get6MonthChartData(expenses: Expense[], income: IncomeSource[], debts: Debt[]) {
-  const monthlyIncome = getMonthlyIncomeTotal(income)
   const debtPayments = getMonthlyDebtPayments(debts)
 
   return Array.from({ length: 6 }, (_, i) => {
     const month = startOfMonth(subMonths(new Date(), 5 - i))
+    const inc = getMonthlyIncomeTotalForMonth(income, month)
     const exp = getExpensesForMonth(expenses, month)
     return {
       month: format(month, 'LLL', { locale: ru }),
       fullMonth: format(month, 'LLLL yyyy', { locale: ru }),
-      income: Math.round(monthlyIncome),
+      income: Math.round(inc),
       expenses: Math.round(exp),
       debts: Math.round(debtPayments),
-      free: Math.round(monthlyIncome - exp - debtPayments),
+      free: Math.round(inc - exp - debtPayments),
     }
   })
 }
@@ -174,7 +203,7 @@ export function getFreeMoneyAfterObligations(
   debts: Debt[],
   month: Date
 ): number {
-  const totalIncome = getMonthlyIncomeTotal(income)
+  const totalIncome = getMonthlyIncomeTotalForMonth(income, month)
   const recurringExp = expenses
     .filter(e => e.recurring)
     .reduce((s, e) => s + (e.frequency === 'weekly' ? e.amount * 4.33 : e.frequency === 'yearly' ? e.amount / 12 : e.amount), 0)

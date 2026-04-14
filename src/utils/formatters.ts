@@ -1,9 +1,7 @@
-export function formatCurrency(amount: number, symbol = '₽', locale = 'ru-RU'): string {
-  const formatted = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Math.round(amount))
-  return `${formatted} ${symbol}`
+export function formatCurrency(amount: number, symbol = '₽'): string {
+  const abs = Math.round(Math.abs(amount))
+  const formatted = abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return amount < 0 ? `−${formatted} ${symbol}` : `${formatted} ${symbol}`
 }
 
 export function formatPercent(value: number): string {
@@ -11,10 +9,11 @@ export function formatPercent(value: number): string {
 }
 
 export function formatMonths(months: number): string {
+  if (months <= 0) return '0 мес.'
   const years = Math.floor(months / 12)
   const m = months % 12
   if (years === 0) return `${m} мес.`
-  if (m === 0) return `${years} лет`
+  if (m === 0) return `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`
   return `${years} л. ${m} мес.`
 }
 

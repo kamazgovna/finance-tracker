@@ -17,11 +17,11 @@ import LoginPage from './components/LoginPage'
 import clsx from 'clsx'
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Дашборд' },
+  { to: '/', icon: LayoutDashboard, label: 'Бюджет' },
   { to: '/debts', icon: CreditCard, label: 'Долги' },
   { to: '/income', icon: TrendingUp, label: 'Доходы' },
   { to: '/expenses', icon: ShoppingCart, label: 'Расходы' },
-  { to: '/budgets', icon: PiggyBank, label: 'Бюджет' },
+  { to: '/budgets', icon: PiggyBank, label: 'Лимиты' },
   { to: '/goals', icon: Target, label: 'Цели' },
   { to: '/settings', icon: Settings, label: 'Настройки' },
 ]

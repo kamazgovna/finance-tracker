@@ -56,7 +56,7 @@ export default function Budgets() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Бюджет</h1>
+          <h1 className="text-2xl font-bold text-slate-100">Лимиты</h1>
           <p className="text-slate-400 text-sm mt-1">Лимиты по категориям</p>
         </div>
         <div className="flex items-center gap-3">

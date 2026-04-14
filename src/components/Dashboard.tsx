@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useStore, useSettingsStore } from '../store/useStore'
 import { useMonthStore } from '../store/useMonthStore'
 import {
-  getMonthlyIncomeTotal, getMonthlyDebtPayments, getTotalDebt,
+  getMonthlyIncomeTotalForMonth, getMonthlyDebtPayments, getTotalDebt,
   getExpensesForMonth, getExpensesForMonthByCategory,
   get6MonthChartData, getUserBreakdown, getFreeMoneyAfterObligations,
 } from '../utils/calculations'
@@ -62,7 +62,7 @@ export default function Dashboard() {
   const { selectedMonth } = useMonthStore()
   const sym = settings.currencySymbol
 
-  const monthlyIncome = useMemo(() => getMonthlyIncomeTotal(income), [income])
+  const monthlyIncome = useMemo(() => getMonthlyIncomeTotalForMonth(income, selectedMonth), [income, selectedMonth])
   const monthlyExpenses = useMemo(() => getExpensesForMonth(expenses, selectedMonth), [expenses, selectedMonth])
   const totalDebt = useMemo(() => getTotalDebt(debts), [debts])
   const monthlyDebtPayments = useMemo(() => getMonthlyDebtPayments(debts), [debts])
@@ -76,7 +76,10 @@ export default function Dashboard() {
     })).filter(e => e.value > 0).sort((a, b) => b.value - a.value)
   }, [expenses, selectedMonth])
 
-  const chartData = useMemo(() => get6MonthChartData(expenses, income, debts), [expenses, income, debts])
+  const chartData = useMemo(() =>
+    get6MonthChartData(expenses, income, debts).map(d => ({ ...d, total: d.expenses + d.debts })),
+    [expenses, income, debts]
+  )
 
   const userBreakdown = useMemo(() => getUserBreakdown(expenses, selectedMonth), [expenses, selectedMonth])
   const userBreakdownEntries = Object.entries(userBreakdown).sort((a, b) => b[1] - a[1])
@@ -108,7 +111,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Дашборд</h1>
+          <h1 className="text-2xl font-bold text-slate-100">Бюджет</h1>
           <p className="text-slate-400 text-sm mt-0.5">Общая картина финансов</p>
         </div>
         <MonthSelector />
@@ -136,28 +139,6 @@ export default function Dashboard() {
           sub={`${formatCurrency(monthlyDebtPayments, sym)}/мес`}
           icon={CreditCard} color="yellow"
         />
-      </div>
-
-      {/* 6-month chart */}
-      <div className="card">
-        <h3 className="font-semibold text-slate-200 mb-4">Тренд — 6 месяцев</h3>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={chartData} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
-            <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false}
-              tickFormatter={(v) => `${(v / 1000).toFixed(0)}к`} />
-            <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, color: '#f1f5f9' }}
-              formatter={(v: number, name: string) => [formatCurrency(v, sym), name]}
-              labelStyle={{ color: '#94a3b8', marginBottom: 4 }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-            <ReferenceLine y={0} stroke="#334155" />
-            <Bar dataKey="income" name="Доход" fill="#10b981" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="expenses" name="Расходы" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="debts" name="Долги" fill="#ef4444" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
       </div>
 
       {/* Pie + user breakdown */}

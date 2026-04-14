@@ -15,6 +15,8 @@ function debtFromDB(r: Record<string, unknown>): Debt {
     interestRate: r.interest_rate as number,
     monthlyPayment: r.monthly_payment as number,
     startDate: (r.start_date as string) ?? '',
+    endDate: (r.end_date as string) ?? undefined,
+    originalTermMonths: (r.original_term_months as number) ?? undefined,
     notes: (r.notes as string) ?? '',
     createdBy: (r.created_by as string) ?? undefined,
     createdByName: (r.created_by_name as string) ?? undefined,
@@ -26,7 +28,10 @@ function debtToDB(d: Omit<Debt, 'id'>, userName?: string) {
     name: d.name, type: d.type,
     total_amount: d.totalAmount, remaining_balance: d.remainingBalance,
     interest_rate: d.interestRate, monthly_payment: d.monthlyPayment,
-    start_date: d.startDate, notes: d.notes,
+    start_date: d.startDate,
+    end_date: d.endDate ?? null,
+    original_term_months: d.originalTermMonths ?? null,
+    notes: d.notes,
     ...(userName ? { created_by_name: userName } : {}),
   }
 }
@@ -94,6 +99,9 @@ export const useSettingsStore = create<SettingsStore>()(
 )
 
 // --- Finance store (Supabase) ---
+
+// Module-level realtime subscription (singleton)
+let realtimeChannel: ReturnType<typeof supabase.channel> | null = null
 
 async function getCurrentUserName(): Promise<string> {
   const { data } = await supabase.auth.getUser()
@@ -164,6 +172,18 @@ export const useStore = create<FinanceStore>()((set, get) => ({
       loading: false,
       initialized: true,
     })
+
+    // Set up real-time subscription (only once per session)
+    if (!realtimeChannel) {
+      realtimeChannel = supabase
+        .channel('finance-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_debts' }, () => get().fetchAll())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_income' }, () => get().fetchAll())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_expenses' }, () => get().fetchAll())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_budgets' }, () => get().fetchAll())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_goals' }, () => get().fetchAll())
+        .subscribe()
+    }
   },
 
   // Debts
