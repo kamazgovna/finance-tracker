@@ -4,8 +4,9 @@ import { Debt, DebtType, DEBT_TYPE_LABELS } from '../types'
 import { getDebtMetrics, calculateAmortization } from '../utils/calculations'
 import { formatCurrency, formatMonths } from '../utils/formatters'
 import {
-  Plus, Trash2, Edit2, ChevronDown, ChevronUp, Calculator, X, CreditCard
+  Plus, Trash2, Edit2, ChevronDown, ChevronUp, Calculator, X, CreditCard, AlertTriangle
 } from 'lucide-react'
+import { isPaymentSufficient } from '../utils/calculations'
 import clsx from 'clsx'
 
 const DEBT_TYPE_OPTIONS: { value: DebtType; label: string }[] = Object.entries(DEBT_TYPE_LABELS).map(
@@ -129,6 +130,20 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
       </div>
 
       <div className="p-5 space-y-4">
+        {/* Insufficient payment warning */}
+        {base.insufficient && (
+          <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-red-400">Платёж меньше процентов!</p>
+              <p className="text-xs text-red-400/70 mt-0.5">
+                Минимум {formatCurrency(debt.remainingBalance * debt.interestRate / 100 / 12, sym)}/мес чтобы долг не рос.
+                Текущий платёж не покрывает проценты — долг увеличивается.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Extra payment calculator */}
         <div className="bg-slate-800/60 rounded-xl p-4">
           <label className="label flex items-center gap-2">
@@ -141,7 +156,7 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
             value={extra || ''}
             onChange={e => setExtra(parseFloat(e.target.value) || 0)}
           />
-          {extra > 0 && (
+          {extra > 0 && !withExtra.insufficient && (
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
                 <p className="text-xs text-emerald-400 font-medium">Сэкономлено %</p>
@@ -210,10 +225,17 @@ function DebtCard({ debt }: { debt: Debt }) {
 
   const metrics = useMemo(() => getDebtMetrics(debt), [debt])
   const pct = debt.totalAmount > 0 ? (1 - debt.remainingBalance / debt.totalAmount) * 100 : 0
+  const paymentOk = useMemo(() => isPaymentSufficient(debt), [debt])
 
   return (
     <>
-      <div className="card">
+      <div className={clsx('card', !paymentOk && 'border-red-500/30')}>
+        {!paymentOk && (
+          <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 mb-3">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+            <p className="text-xs text-red-400">Платёж не покрывает проценты — долг растёт!</p>
+          </div>
+        )}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">

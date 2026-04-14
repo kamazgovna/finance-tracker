@@ -1,6 +1,12 @@
 import { Debt, IncomeSource, Expense, AmortizationRow } from '../types'
 import { addMonths, format, startOfMonth, isWithinInterval, parseISO } from 'date-fns'
 
+export function isPaymentSufficient(debt: Debt, extraPayment = 0): boolean {
+  if (debt.interestRate === 0) return true
+  const monthlyInterest = debt.remainingBalance * (debt.interestRate / 100 / 12)
+  return (debt.monthlyPayment + extraPayment) > monthlyInterest
+}
+
 export function calculateAmortization(debt: Debt, extraPayment = 0): AmortizationRow[] {
   const monthlyRate = debt.interestRate / 100 / 12
   const rows: AmortizationRow[] = []
@@ -11,16 +17,21 @@ export function calculateAmortization(debt: Debt, extraPayment = 0): Amortizatio
 
   while (balance > 0.01 && month < 600) {
     const interest = balance * monthlyRate
-    const payment = Math.min(debt.monthlyPayment + extraPayment, balance + interest)
-    const principal = payment - interest
-    balance = Math.max(0, balance - principal)
+    const principal = debt.monthlyPayment + extraPayment - interest
+
+    // Payment doesn't cover interest — debt is growing, stop
+    if (principal <= 0) break
+
+    const actualPayment = Math.min(debt.monthlyPayment + extraPayment, balance + interest)
+    const actualPrincipal = Math.min(principal, balance)
+    balance = Math.max(0, balance - actualPrincipal)
     totalInterestPaid += interest
 
     rows.push({
       month: month + 1,
       date: format(addMonths(startDate, month), 'MM.yyyy'),
-      payment,
-      principal,
+      payment: actualPayment,
+      principal: actualPrincipal,
       interest,
       balance,
       totalInterestPaid,
@@ -37,12 +48,14 @@ export function getDebtMetrics(debt: Debt, extraPayment = 0) {
   const rows = calculateAmortization(debt, extraPayment)
   const totalPaid = rows.reduce((s, r) => s + r.payment, 0)
   const totalInterest = rows.reduce((s, r) => s + r.interest, 0)
+  const sufficient = isPaymentSufficient(debt, extraPayment)
   return {
     totalPaid,
     totalInterest,
     overpayment: totalInterest,
     monthsLeft: rows.length,
     payoffDate: rows[rows.length - 1]?.date ?? '—',
+    insufficient: !sufficient,
   }
 }
 
