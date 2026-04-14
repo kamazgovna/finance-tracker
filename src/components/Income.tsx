@@ -225,6 +225,15 @@ export default function Income() {
                   {source.frequency !== 'monthly' && (
                     <p className="text-xs text-slate-500">{formatCurrency(monthly, sym)}/мес</p>
                   )}
+                  {source.createdByName && (
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full mt-1 inline-block ${
+                      source.createdByName === 'Юля'
+                        ? 'bg-pink-500/10 text-pink-400'
+                        : 'bg-blue-500/10 text-blue-400'
+                    }`}>
+                      {source.createdByName}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button

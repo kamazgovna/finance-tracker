@@ -16,19 +16,18 @@ function debtFromDB(r: Record<string, unknown>): Debt {
     monthlyPayment: r.monthly_payment as number,
     startDate: (r.start_date as string) ?? '',
     notes: (r.notes as string) ?? '',
+    createdBy: (r.created_by as string) ?? undefined,
+    createdByName: (r.created_by_name as string) ?? undefined,
   }
 }
 
-function debtToDB(d: Omit<Debt, 'id'>) {
+function debtToDB(d: Omit<Debt, 'id'>, userName?: string) {
   return {
-    name: d.name,
-    type: d.type,
-    total_amount: d.totalAmount,
-    remaining_balance: d.remainingBalance,
-    interest_rate: d.interestRate,
-    monthly_payment: d.monthlyPayment,
-    start_date: d.startDate,
-    notes: d.notes,
+    name: d.name, type: d.type,
+    total_amount: d.totalAmount, remaining_balance: d.remainingBalance,
+    interest_rate: d.interestRate, monthly_payment: d.monthlyPayment,
+    start_date: d.startDate, notes: d.notes,
+    ...(userName ? { created_by_name: userName } : {}),
   }
 }
 
@@ -41,17 +40,16 @@ function incomeFromDB(r: Record<string, unknown>): IncomeSource {
     category: r.category as IncomeSource['category'],
     date: (r.date as string) ?? undefined,
     notes: (r.notes as string) ?? '',
+    createdBy: (r.created_by as string) ?? undefined,
+    createdByName: (r.created_by_name as string) ?? undefined,
   }
 }
 
-function incomeToDB(s: Omit<IncomeSource, 'id'>) {
+function incomeToDB(s: Omit<IncomeSource, 'id'>, userName?: string) {
   return {
-    name: s.name,
-    amount: s.amount,
-    frequency: s.frequency,
-    category: s.category,
-    date: s.date,
-    notes: s.notes,
+    name: s.name, amount: s.amount, frequency: s.frequency,
+    category: s.category, date: s.date, notes: s.notes,
+    ...(userName ? { created_by_name: userName } : {}),
   }
 }
 
@@ -65,18 +63,16 @@ function expenseFromDB(r: Record<string, unknown>): Expense {
     recurring: r.recurring as boolean,
     frequency: (r.frequency as Expense['frequency']) ?? undefined,
     notes: (r.notes as string) ?? '',
+    createdBy: (r.created_by as string) ?? undefined,
+    createdByName: (r.created_by_name as string) ?? undefined,
   }
 }
 
-function expenseToDB(e: Omit<Expense, 'id'>) {
+function expenseToDB(e: Omit<Expense, 'id'>, userName?: string) {
   return {
-    name: e.name,
-    amount: e.amount,
-    category: e.category,
-    date: e.date,
-    recurring: e.recurring,
-    frequency: e.frequency,
-    notes: e.notes,
+    name: e.name, amount: e.amount, category: e.category,
+    date: e.date, recurring: e.recurring, frequency: e.frequency, notes: e.notes,
+    ...(userName ? { created_by_name: userName } : {}),
   }
 }
 
@@ -98,6 +94,13 @@ export const useSettingsStore = create<SettingsStore>()(
 )
 
 // --- Finance store (Supabase) ---
+
+async function getCurrentUserName(): Promise<string> {
+  const { data } = await supabase.auth.getUser()
+  return (data.user?.user_metadata?.display_name as string)
+    ?? data.user?.email?.split('@')[0]
+    ?? '?'
+}
 
 interface FinanceStore {
   debts: Debt[]
@@ -146,7 +149,8 @@ export const useStore = create<FinanceStore>()((set, get) => ({
 
   // Debts
   addDebt: async (debt) => {
-    const { data, error } = await supabase.from('finance_debts').insert(debtToDB(debt)).select().single()
+    const name = await getCurrentUserName()
+    const { data, error } = await supabase.from('finance_debts').insert(debtToDB(debt, name)).select().single()
     if (!error && data) set((s) => ({ debts: [...s.debts, debtFromDB(data)] }))
   },
   updateDebt: async (id, debt) => {
@@ -163,7 +167,8 @@ export const useStore = create<FinanceStore>()((set, get) => ({
 
   // Income
   addIncome: async (source) => {
-    const { data, error } = await supabase.from('finance_income').insert(incomeToDB(source)).select().single()
+    const name = await getCurrentUserName()
+    const { data, error } = await supabase.from('finance_income').insert(incomeToDB(source, name)).select().single()
     if (!error && data) set((s) => ({ income: [...s.income, incomeFromDB(data)] }))
   },
   updateIncome: async (id, source) => {
@@ -180,7 +185,8 @@ export const useStore = create<FinanceStore>()((set, get) => ({
 
   // Expenses
   addExpense: async (expense) => {
-    const { data, error } = await supabase.from('finance_expenses').insert(expenseToDB(expense)).select().single()
+    const name = await getCurrentUserName()
+    const { data, error } = await supabase.from('finance_expenses').insert(expenseToDB(expense, name)).select().single()
     if (!error && data) set((s) => ({ expenses: [expenseFromDB(data), ...s.expenses] }))
   },
   updateExpense: async (id, expense) => {

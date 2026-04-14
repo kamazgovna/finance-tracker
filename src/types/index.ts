@@ -25,6 +25,8 @@ export interface Debt {
   monthlyPayment: number
   startDate: string
   notes?: string
+  createdBy?: string
+  createdByName?: string
 }
 
 export interface IncomeSource {
@@ -35,6 +37,8 @@ export interface IncomeSource {
   category: IncomeCategory
   date?: string
   notes?: string
+  createdBy?: string
+  createdByName?: string
 }
 
 export interface Expense {
@@ -46,6 +50,8 @@ export interface Expense {
   recurring: boolean
   frequency?: 'monthly' | 'weekly' | 'yearly'
   notes?: string
+  createdBy?: string
+  createdByName?: string
 }
 
 export interface Settings {

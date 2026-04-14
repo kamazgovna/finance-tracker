@@ -307,6 +307,15 @@ export default function Expenses() {
                       )}/мес
                     </p>
                   )}
+                  {expense.createdByName && (
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full mt-1 inline-block ${
+                      expense.createdByName === 'Юля'
+                        ? 'bg-pink-500/10 text-pink-400'
+                        : 'bg-blue-500/10 text-blue-400'
+                    }`}>
+                      {expense.createdByName}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
