@@ -1,0 +1,129 @@
+import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import {
+  LayoutDashboard, CreditCard, TrendingUp, ShoppingCart, Settings, Menu, X, DollarSign
+} from 'lucide-react'
+import Dashboard from './components/Dashboard'
+import Debts from './components/Debts'
+import Income from './components/Income'
+import Expenses from './components/Expenses'
+import SettingsPage from './components/SettingsPage'
+import clsx from 'clsx'
+
+const navItems = [
+  { to: '/', icon: LayoutDashboard, label: 'Дашборд' },
+  { to: '/debts', icon: CreditCard, label: 'Долги' },
+  { to: '/income', icon: TrendingUp, label: 'Доходы' },
+  { to: '/expenses', icon: ShoppingCart, label: 'Расходы' },
+  { to: '/settings', icon: Settings, label: 'Настройки' },
+]
+
+function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const location = useLocation()
+  return (
+    <>
+      {/* Overlay */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={clsx(
+        'fixed top-0 left-0 h-full w-64 bg-slate-900 border-r border-slate-800 z-40',
+        'flex flex-col transition-transform duration-300',
+        'lg:translate-x-0',
+        open ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+            <DollarSign className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <p className="font-bold text-slate-100 text-sm">Finance Tracker</p>
+            <p className="text-xs text-slate-500">Личный бюджет</p>
+          </div>
+          <button
+            className="ml-auto lg:hidden text-slate-400 hover:text-slate-200"
+            onClick={onClose}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {navItems.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              onClick={onClose}
+              className={({ isActive }) => clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                isActive
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              )}
+            >
+              <Icon className="w-4.5 h-4.5 w-[18px] h-[18px]" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="px-5 py-4 border-t border-slate-800">
+          <p className="text-xs text-slate-600">v1.0.0 · Данные хранятся локально</p>
+        </div>
+      </aside>
+    </>
+  )
+}
+
+function Layout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Main */}
+      <main className="flex-1 lg:ml-64 min-h-screen">
+        {/* Mobile header */}
+        <header className="lg:hidden sticky top-0 z-20 bg-slate-950/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center gap-3">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-slate-400 hover:text-slate-200"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-emerald-400" />
+            <span className="font-semibold text-sm">Finance Tracker</span>
+          </div>
+        </header>
+
+        <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/debts" element={<Debts />} />
+            <Route path="/income" element={<Income />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <HashRouter>
+      <Layout />
+    </HashRouter>
+  )
+}

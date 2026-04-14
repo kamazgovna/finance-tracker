@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-slate-900 border border-slate-800 rounded-2xl p-5;
+  }
+
+  .btn-primary {
+    @apply bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-4 py-2 rounded-xl
+           transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium px-4 py-2 rounded-xl
+           transition-all duration-150 active:scale-95 border border-slate-700;
+  }
+
+  .btn-danger {
+    @apply bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium px-4 py-2 rounded-xl
+           transition-all duration-150 active:scale-95 border border-red-500/20;
+  }
+
+  .input {
+    @apply bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100
+           placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50
+           focus:border-emerald-500/50 transition-all w-full text-sm;
+  }
+
+  .select {
+    @apply bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100
+           focus:outline-none focus:ring-2 focus:ring-emerald-500/50
+           focus:border-emerald-500/50 transition-all w-full text-sm cursor-pointer;
+  }
+
+  .label {
+    @apply text-xs font-medium text-slate-400 mb-1 block;
+  }
+
+  .badge-green {
+    @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
+           text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .badge-red {
+    @apply bg-red-500/10 text-red-400 border border-red-500/20
+           text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .badge-yellow {
+    @apply bg-amber-500/10 text-amber-400 border border-amber-500/20
+           text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .badge-blue {
+    @apply bg-blue-500/10 text-blue-400 border border-blue-500/20
+           text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+}
