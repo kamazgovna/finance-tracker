@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, useSettingsStore } from '../store/useStore'
 import { IncomeSource, IncomeCategory, INCOME_CATEGORY_LABELS, Frequency } from '../types'
 import { getMonthlyIncomeTotal } from '../utils/calculations'
 import { formatCurrency } from '../utils/formatters'
@@ -114,7 +114,8 @@ const CATEGORY_COLORS: Record<IncomeCategory, string> = {
 }
 
 export default function Income() {
-  const { income, addIncome, updateIncome, deleteIncome, settings } = useStore()
+  const { income, addIncome, updateIncome, deleteIncome } = useStore()
+  const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
   const [addOpen, setAddOpen] = useState(false)
   const [editItem, setEditItem] = useState<IncomeSource | null>(null)
@@ -247,7 +248,7 @@ export default function Income() {
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)}>
         <IncomeForm
-          onSave={(data) => { addIncome({ ...data, id: crypto.randomUUID() }); setAddOpen(false) }}
+          onSave={(data) => { addIncome(data); setAddOpen(false) }}
           onClose={() => setAddOpen(false)}
         />
       </Modal>

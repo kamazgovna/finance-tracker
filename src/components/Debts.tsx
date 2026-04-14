@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, useSettingsStore } from '../store/useStore'
 import { Debt, DebtType, DEBT_TYPE_LABELS } from '../types'
 import { getDebtMetrics, calculateAmortization } from '../utils/calculations'
 import { formatCurrency, formatMonths } from '../utils/formatters'
@@ -108,7 +108,7 @@ function DebtForm({ initial, onSave, onClose }: {
 }
 
 function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void }) {
-  const { settings } = useStore()
+  const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
   const [extra, setExtra] = useState(0)
 
@@ -217,7 +217,8 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
 }
 
 function DebtCard({ debt }: { debt: Debt }) {
-  const { deleteDebt, updateDebt, settings } = useStore()
+  const { deleteDebt, updateDebt } = useStore()
+  const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
   const [expanded, setExpanded] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -348,7 +349,8 @@ function DebtCard({ debt }: { debt: Debt }) {
 }
 
 export default function Debts() {
-  const { debts, addDebt, settings } = useStore()
+  const { debts, addDebt } = useStore()
+  const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
   const [addOpen, setAddOpen] = useState(false)
 
@@ -410,7 +412,7 @@ export default function Debts() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)}>
         <DebtForm
           onSave={(data) => {
-            addDebt({ ...data, id: crypto.randomUUID() })
+            addDebt(data)
             setAddOpen(false)
           }}
           onClose={() => setAddOpen(false)}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useStore } from '../store/useStore'
-import { Settings, Download, Upload, Trash2, AlertTriangle } from 'lucide-react'
+import { useStore, useSettingsStore } from '../store/useStore'
+import { useAuth } from '../contexts/AuthContext'
+import { Settings, LogOut, AlertTriangle } from 'lucide-react'
 
 const CURRENCIES = [
   { code: 'RUB', symbol: '₽', label: 'Российский рубль' },
@@ -13,7 +14,9 @@ const CURRENCIES = [
 ]
 
 export default function SettingsPage() {
-  const { settings, updateSettings, debts, income, expenses } = useStore()
+  const { settings, updateSettings } = useSettingsStore()
+  const { debts, income, expenses } = useStore()
+  const { user, signOut } = useAuth()
   const [confirmClear, setConfirmClear] = useState(false)
 
   const handleExport = () => {
@@ -22,44 +25,10 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `finance-tracker-backup-${new Date().toISOString().split('T')[0]}.json`
+    a.download = `finance-backup-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target?.result as string)
-        if (data.debts) useStore.getState().debts.splice(0, 999, ...data.debts)
-        // Use store methods to update
-        if (data.settings) updateSettings(data.settings)
-        localStorage.setItem('finance-tracker-data', JSON.stringify({
-          state: {
-            debts: data.debts ?? [],
-            income: data.income ?? [],
-            expenses: data.expenses ?? [],
-            settings: data.settings ?? settings,
-          },
-          version: 0,
-        }))
-        window.location.reload()
-      } catch {
-        alert('Ошибка импорта: неверный формат файла')
-      }
-    }
-    reader.readAsText(file)
-  }
-
-  const handleClearAll = () => {
-    localStorage.removeItem('finance-tracker-data')
-    window.location.reload()
-  }
-
-  const selectedCurrency = CURRENCIES.find(c => c.code === settings.currency) ?? CURRENCIES[0]
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -68,19 +37,22 @@ export default function SettingsPage() {
         <p className="text-slate-400 text-sm mt-1">Персонализация и управление данными</p>
       </div>
 
-      {/* Profile */}
-      <div className="card space-y-4">
+      {/* Account */}
+      <div className="card space-y-3">
         <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-          <Settings className="w-4 h-4 text-slate-400" /> Профиль
+          <Settings className="w-4 h-4 text-slate-400" /> Аккаунт
         </h3>
-        <div>
-          <label className="label">Имя (опционально)</label>
-          <input
-            className="input"
-            placeholder="Иван"
-            value={settings.name}
-            onChange={e => updateSettings({ name: e.target.value })}
-          />
+        <div className="flex items-center justify-between bg-slate-800/50 rounded-xl p-3">
+          <div>
+            <p className="text-sm font-medium text-slate-300">{user?.email}</p>
+            <p className="text-xs text-slate-500">Вошли как</p>
+          </div>
+          <button
+            onClick={signOut}
+            className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Выйти
+          </button>
         </div>
       </div>
 
@@ -108,9 +80,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Data stats */}
+      {/* Stats */}
       <div className="card space-y-3">
-        <h3 className="font-semibold text-slate-200">Данные</h3>
+        <h3 className="font-semibold text-slate-200">Данные в облаке</h3>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-2xl font-bold text-slate-100">{debts.length}</p>
@@ -118,7 +90,7 @@ export default function SettingsPage() {
           </div>
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-2xl font-bold text-slate-100">{income.length}</p>
-            <p className="text-xs text-slate-500 mt-1">Источников дохода</p>
+            <p className="text-xs text-slate-500 mt-1">Доходов</p>
           </div>
           <div className="bg-slate-800/50 rounded-xl p-3">
             <p className="text-2xl font-bold text-slate-100">{expenses.length}</p>
@@ -126,23 +98,17 @@ export default function SettingsPage() {
           </div>
         </div>
         <p className="text-xs text-slate-600 text-center">
-          Все данные хранятся в localStorage вашего браузера
+          Данные синхронизируются между всеми устройствами
         </p>
       </div>
 
-      {/* Export / Import */}
+      {/* Export */}
       <div className="card space-y-3">
-        <h3 className="font-semibold text-slate-200">Экспорт и импорт</h3>
-        <p className="text-xs text-slate-500">Сохраните резервную копию или перенесите данные на другое устройство</p>
-        <div className="flex gap-3">
-          <button className="btn-secondary flex items-center gap-2" onClick={handleExport}>
-            <Download className="w-4 h-4" /> Экспорт JSON
-          </button>
-          <label className="btn-secondary flex items-center gap-2 cursor-pointer">
-            <Upload className="w-4 h-4" /> Импорт JSON
-            <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-          </label>
-        </div>
+        <h3 className="font-semibold text-slate-200">Резервная копия</h3>
+        <p className="text-xs text-slate-500">Скачать все данные в JSON</p>
+        <button className="btn-secondary flex items-center gap-2" onClick={handleExport}>
+          Экспорт JSON
+        </button>
       </div>
 
       {/* Danger zone */}
@@ -151,22 +117,23 @@ export default function SettingsPage() {
           <AlertTriangle className="w-4 h-4" /> Опасная зона
         </h3>
         {!confirmClear ? (
-          <button
-            className="btn-danger flex items-center gap-2"
-            onClick={() => setConfirmClear(true)}
-          >
-            <Trash2 className="w-4 h-4" /> Очистить все данные
+          <button className="btn-danger flex items-center gap-2" onClick={() => setConfirmClear(true)}>
+            Очистить все данные
           </button>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-red-400">Вы уверены? Все данные будут удалены безвозвратно.</p>
+            <p className="text-sm text-red-400">Данные будут удалены из облака у всех пользователей. Это необратимо.</p>
             <div className="flex gap-3">
               <button className="btn-secondary" onClick={() => setConfirmClear(false)}>Отмена</button>
               <button
                 className="bg-red-500 hover:bg-red-400 text-white font-semibold px-4 py-2 rounded-xl transition-all"
-                onClick={handleClearAll}
+                onClick={() => {
+                  // Will be implemented if needed
+                  alert('Для полной очистки удалите записи вручную в Supabase')
+                  setConfirmClear(false)
+                }}
               >
-                Да, удалить всё
+                Да, удалить
               </button>
             </div>
           </div>

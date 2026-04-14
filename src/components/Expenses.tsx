@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, useSettingsStore } from '../store/useStore'
 import {
   Expense, ExpenseCategory, EXPENSE_CATEGORY_LABELS, EXPENSE_CATEGORY_COLORS
 } from '../types'
@@ -125,7 +125,8 @@ function ExpenseForm({ initial, onSave, onClose }: {
 }
 
 export default function Expenses() {
-  const { expenses, addExpense, updateExpense, deleteExpense, settings } = useStore()
+  const { expenses, addExpense, updateExpense, deleteExpense } = useStore()
+  const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
   const [addOpen, setAddOpen] = useState(false)
   const [editItem, setEditItem] = useState<Expense | null>(null)
@@ -329,7 +330,7 @@ export default function Expenses() {
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)}>
         <ExpenseForm
-          onSave={(data) => { addExpense({ ...data, id: crypto.randomUUID() }); setAddOpen(false) }}
+          onSave={(data) => { addExpense(data); setAddOpen(false) }}
           onClose={() => setAddOpen(false)}
         />
       </Modal>

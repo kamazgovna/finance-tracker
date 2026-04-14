@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, useSettingsStore } from '../store/useStore'
 import {
   getMonthlyIncomeTotal,
   getMonthlyExpensesTotal,
@@ -66,7 +66,8 @@ function CustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }: an
 }
 
 export default function Dashboard() {
-  const { debts, income, expenses, settings } = useStore()
+  const { debts, income, expenses } = useStore()
+  const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
 
   const monthlyIncome = useMemo(() => getMonthlyIncomeTotal(income), [income])
