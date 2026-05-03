@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
 import { useStore, useSettingsStore } from '../store/useStore'
 import { IncomeSource, IncomeCategory, INCOME_CATEGORY_LABELS, Frequency } from '../types'
-import { getMonthlyIncomeTotal } from '../utils/calculations'
+import { getIncomeForMonthByCategory, getMonthlyIncomeTotalForMonth, incomeToMonthlyAmount } from '../utils/calculations'
+import { useMonthStore } from '../store/useMonthStore'
+import MonthSelector from './MonthSelector'
 import { formatCurrency } from '../utils/formatters'
 import { Plus, Trash2, Edit2, X, TrendingUp } from 'lucide-react'
 
@@ -12,17 +14,6 @@ const FREQUENCY_LABELS: Record<Frequency, string> = {
   quarterly: 'Раз в квартал',
   yearly: 'Ежегодно',
   oneTime: 'Разово',
-}
-
-function toMonthly(amount: number, freq: Frequency): number {
-  switch (freq) {
-    case 'monthly': return amount
-    case 'weekly': return amount * 4.33
-    case 'biweekly': return amount * 2.17
-    case 'quarterly': return amount / 3
-    case 'yearly': return amount / 12
-    case 'oneTime': return amount
-  }
 }
 
 const INCOME_CATEGORY_OPTIONS = Object.entries(INCOME_CATEGORY_LABELS).map(([v, l]) => ({ value: v as IncomeCategory, label: l }))
@@ -122,28 +113,41 @@ const CATEGORY_COLORS: Record<IncomeCategory, string> = {
 export default function Income() {
   const { income, addIncome, updateIncome, deleteIncome } = useStore()
   const { settings } = useSettingsStore()
+  const { selectedMonth } = useMonthStore()
   const sym = settings.currencySymbol
   const [addOpen, setAddOpen] = useState(false)
   const [editItem, setEditItem] = useState<IncomeSource | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  const monthlyTotal = useMemo(() => income.reduce((s, src) => s + toMonthly(src.amount, src.frequency), 0), [income])
+  const monthlyTotal = useMemo(() => getMonthlyIncomeTotalForMonth(income, selectedMonth), [income, selectedMonth])
 
   // Group by category
   const byCategory = useMemo(() => {
+    const byMonth = getIncomeForMonthByCategory(income, selectedMonth)
     const map: Record<string, { label: string; total: number; color: string }> = {}
-    income.forEach(s => {
-      const monthly = toMonthly(s.amount, s.frequency)
-      if (!map[s.category]) {
-        map[s.category] = {
-          label: INCOME_CATEGORY_LABELS[s.category],
+    Object.entries(byMonth).forEach(([category, total]) => {
+      const cat = category as IncomeCategory
+      if (!map[cat]) {
+        map[cat] = {
+          label: INCOME_CATEGORY_LABELS[cat],
           total: 0,
-          color: CATEGORY_COLORS[s.category],
+          color: CATEGORY_COLORS[cat],
         }
       }
-      map[s.category].total += monthly
+      map[cat].total += total
     })
     return Object.entries(map).sort((a, b) => b[1].total - a[1].total)
-  }, [income])
+  }, [income, selectedMonth])
+
+  const handleSave = async (action: () => Promise<void>, close: () => void) => {
+    setSaving(true)
+    try {
+      await action()
+      close()
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -152,9 +156,12 @@ export default function Income() {
           <h1 className="text-2xl font-bold text-slate-100">Доходы</h1>
           <p className="text-slate-400 text-sm mt-1">Все источники поступлений</p>
         </div>
-        <button className="btn-primary flex items-center gap-2 shrink-0" onClick={() => setAddOpen(true)}>
-          <Plus className="w-4 h-4" /> Добавить доход
-        </button>
+        <div className="flex items-center gap-3">
+          <MonthSelector />
+          <button className="btn-primary flex items-center gap-2 shrink-0" onClick={() => setAddOpen(true)}>
+            <Plus className="w-4 h-4" /> Добавить доход
+          </button>
+        </div>
       </div>
 
       {/* Total */}
@@ -209,7 +216,7 @@ export default function Income() {
       ) : (
         <div className="space-y-3">
           {income.map(source => {
-            const monthly = toMonthly(source.amount, source.frequency)
+            const monthly = incomeToMonthlyAmount(source, selectedMonth)
             const color = CATEGORY_COLORS[source.category]
             return (
               <div key={source.id} className="card flex items-center gap-4">
@@ -250,7 +257,7 @@ export default function Income() {
                   </button>
                   <button
                     className="text-slate-400 hover:text-red-400 transition-colors"
-                    onClick={() => { if (confirm(`Удалить "${source.name}"?`)) deleteIncome(source.id) }}
+                    onClick={() => { if (confirm(`Удалить "${source.name}"?`)) deleteIncome(source.id).catch(() => undefined) }}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -263,7 +270,7 @@ export default function Income() {
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)}>
         <IncomeForm
-          onSave={(data) => { addIncome(data); setAddOpen(false) }}
+          onSave={(data) => { handleSave(() => addIncome(data), () => setAddOpen(false)).catch(() => undefined) }}
           onClose={() => setAddOpen(false)}
         />
       </Modal>
@@ -272,7 +279,7 @@ export default function Income() {
         {editItem && (
           <IncomeForm
             initial={editItem}
-            onSave={(data) => { updateIncome(editItem.id, data); setEditItem(null) }}
+            onSave={(data) => { handleSave(() => updateIncome(editItem.id, data), () => setEditItem(null)).catch(() => undefined) }}
             onClose={() => setEditItem(null)}
           />
         )}

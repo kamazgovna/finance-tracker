@@ -1,20 +1,21 @@
 import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import {
   LayoutDashboard, CreditCard, TrendingUp, ShoppingCart, Settings,
-  Menu, X, DollarSign, LogOut, Loader2, PiggyBank, Target
+  Menu, X, DollarSign, LogOut, Loader2, PiggyBank, Target, AlertCircle
 } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { useStore } from './store/useStore'
-import Dashboard from './components/Dashboard'
-import Debts from './components/Debts'
-import Income from './components/Income'
-import Expenses from './components/Expenses'
-import Budgets from './components/Budgets'
-import Goals from './components/Goals'
-import SettingsPage from './components/SettingsPage'
 import LoginPage from './components/LoginPage'
 import clsx from 'clsx'
+
+const Dashboard = lazy(() => import('./components/Dashboard'))
+const Debts = lazy(() => import('./components/Debts'))
+const Income = lazy(() => import('./components/Income'))
+const Expenses = lazy(() => import('./components/Expenses'))
+const Budgets = lazy(() => import('./components/Budgets'))
+const Goals = lazy(() => import('./components/Goals'))
+const SettingsPage = lazy(() => import('./components/SettingsPage'))
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Бюджет' },
@@ -28,6 +29,7 @@ const navItems = [
 
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, signOut } = useAuth()
+  const reset = useStore(s => s.reset)
 
   return (
     <>
@@ -78,7 +80,10 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             <p className="text-xs text-slate-500 truncate">{user?.email}</p>
           </div>
           <button
-            onClick={signOut}
+            onClick={async () => {
+              reset()
+              await signOut()
+            }}
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium w-full
                        text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
           >
@@ -93,14 +98,17 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 function AppContent() {
   const { session, loading: authLoading } = useAuth()
-  const { fetchAll, initialized, loading: dataLoading } = useStore()
+  const { fetchAll, initialized, loading: dataLoading, error, clearError, reset } = useStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (session && !initialized) {
-      fetchAll()
+      fetchAll().catch(() => undefined)
     }
-  }, [session, initialized, fetchAll])
+    if (!session && initialized) {
+      reset()
+    }
+  }, [session, initialized, fetchAll, reset])
 
   if (authLoading) {
     return (
@@ -135,15 +143,24 @@ function AppContent() {
           </div>
         </header>
         <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/debts" element={<Debts />} />
-            <Route path="/income" element={<Income />} />
-            <Route path="/expenses" element={<Expenses />} />
-            <Route path="/budgets" element={<Budgets />} />
-            <Route path="/goals" element={<Goals />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+          {error && (
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+              <div className="flex-1">{error}</div>
+              <button className="text-xs text-red-300/70 hover:text-red-200" onClick={clearError}>Закрыть</button>
+            </div>
+          )}
+          <Suspense fallback={<div className="flex items-center gap-2 text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Загружаем раздел...</div>}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/debts" element={<Debts />} />
+              <Route path="/income" element={<Income />} />
+              <Route path="/expenses" element={<Expenses />} />
+              <Route path="/budgets" element={<Budgets />} />
+              <Route path="/goals" element={<Goals />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
     </div>

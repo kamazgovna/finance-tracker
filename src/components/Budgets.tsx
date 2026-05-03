@@ -42,10 +42,14 @@ export default function Budgets() {
   const handleSave = async () => {
     const val = parseFloat(limit)
     if (!val || val <= 0) return
-    await setBudget(category, val)
-    setAddOpen(false)
-    setLimit('')
-    setCategory('food')
+    try {
+      await setBudget(category, val)
+      setAddOpen(false)
+      setLimit('')
+      setCategory('food')
+    } catch {
+      // Global store error banner shows the actual failure.
+    }
   }
 
   // Categories without budget (for the add form)
@@ -105,7 +109,7 @@ export default function Budgets() {
                     {isWarning && <span className="badge-yellow">Почти лимит</span>}
                   </div>
                   <button
-                    onClick={() => deleteBudget(budget.id)}
+                    onClick={() => deleteBudget(budget.id).catch(() => undefined)}
                     className="text-slate-500 hover:text-red-400 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />

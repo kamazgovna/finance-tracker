@@ -1,0 +1,15 @@
+{
+  "name": "Finance Tracker",
+  "short_name": "Finance",
+  "description": "Личный финансовый трекер",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -134,6 +134,7 @@ export default function Expenses() {
   const [addOpen, setAddOpen] = useState(false)
   const [editItem, setEditItem] = useState<Expense | null>(null)
   const [filter, setFilter] = useState<'all' | 'recurring' | 'oneTime'>('all')
+  const [saving, setSaving] = useState(false)
 
   const monthlyTotal = useMemo(() => getExpensesForMonth(expenses, selectedMonth), [expenses, selectedMonth])
 
@@ -173,6 +174,16 @@ export default function Expenses() {
     }, 0),
     [expenses]
   )
+
+  const handleSave = async (action: () => Promise<void>, close: () => void) => {
+    setSaving(true)
+    try {
+      await action()
+      close()
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -324,7 +335,7 @@ export default function Expenses() {
                   </button>
                   <button
                     className="text-slate-400 hover:text-red-400 transition-colors"
-                    onClick={() => { if (confirm(`Удалить "${expense.name}"?`)) deleteExpense(expense.id) }}
+                    onClick={() => { if (confirm(`Удалить "${expense.name}"?`)) deleteExpense(expense.id).catch(() => undefined) }}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -337,7 +348,7 @@ export default function Expenses() {
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)}>
         <ExpenseForm
-          onSave={(data) => { addExpense(data); setAddOpen(false) }}
+          onSave={(data) => { handleSave(() => addExpense(data), () => setAddOpen(false)).catch(() => undefined) }}
           onClose={() => setAddOpen(false)}
         />
       </Modal>
@@ -346,7 +357,7 @@ export default function Expenses() {
         {editItem && (
           <ExpenseForm
             initial={editItem}
-            onSave={(data) => { updateExpense(editItem.id, data); setEditItem(null) }}
+            onSave={(data) => { handleSave(() => updateExpense(editItem.id, data), () => setEditItem(null)).catch(() => undefined) }}
             onClose={() => setEditItem(null)}
           />
         )}

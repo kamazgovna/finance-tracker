@@ -1,4 +1,4 @@
-import { Debt, IncomeSource, Expense, AmortizationRow } from '../types'
+import { Debt, IncomeCategory, IncomeSource, Expense, AmortizationRow } from '../types'
 import { addMonths, subMonths, format, startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameMonth } from 'date-fns'
 import { ru } from 'date-fns/locale'
 
@@ -118,9 +118,25 @@ export function getMonthlyIncomeTotalForMonth(sources: IncomeSource[], month: Da
   }, 0)
 }
 
+export function incomeToMonthlyAmount(source: IncomeSource, month: Date): number {
+  return getMonthlyIncomeTotalForMonth([source], month)
+}
+
+export function getIncomeForMonthByCategory(sources: IncomeSource[], month: Date): Record<IncomeCategory, number> {
+  const byCategory = {} as Record<IncomeCategory, number>
+  sources.forEach((source) => {
+    const amount = incomeToMonthlyAmount(source, month)
+    if (amount > 0) {
+      byCategory[source.category] = (byCategory[source.category] ?? 0) + amount
+    }
+  })
+  return byCategory
+}
+
 export function getExpensesForMonth(expenses: Expense[], month: Date): number {
   return expenses.reduce((sum, e) => {
     if (e.recurring) {
+      if (startOfMonth(parseISO(e.date)) > endOfMonth(month)) return sum
       switch (e.frequency) {
         case 'weekly': return sum + e.amount * 4.33
         case 'yearly': return sum + e.amount / 12
@@ -146,6 +162,7 @@ export function getExpensesForMonthByCategory(expenses: Expense[], month: Date):
   expenses.forEach(e => {
     let amount = 0
     if (e.recurring) {
+      if (startOfMonth(parseISO(e.date)) > endOfMonth(month)) return
       amount = e.frequency === 'weekly' ? e.amount * 4.33
         : e.frequency === 'yearly' ? e.amount / 12
         : e.amount
@@ -167,19 +184,18 @@ export function getExpensesByCategory(expenses: Expense[]) {
 // Filter expenses list for display in a given month
 export function filterExpensesForMonth(expenses: Expense[], month: Date): Expense[] {
   return expenses.filter(e => {
-    if (e.recurring) return true
+    if (e.recurring) return startOfMonth(parseISO(e.date)) <= endOfMonth(month)
     const expDate = parseISO(e.date)
     return isSameMonth(expDate, month)
   })
 }
 
 export function get6MonthChartData(expenses: Expense[], income: IncomeSource[], debts: Debt[]) {
-  const debtPayments = getMonthlyDebtPayments(debts)
-
   return Array.from({ length: 6 }, (_, i) => {
     const month = startOfMonth(subMonths(new Date(), 5 - i))
     const inc = getMonthlyIncomeTotalForMonth(income, month)
     const exp = getExpensesForMonth(expenses, month)
+    const debtPayments = getMonthlyDebtPaymentsForMonth(debts, month)
     return {
       month: format(month, 'LLL', { locale: ru }),
       fullMonth: format(month, 'LLLL yyyy', { locale: ru }),
@@ -197,6 +213,7 @@ export function getUserBreakdown(expenses: Expense[], month: Date) {
     const name = e.createdByName ?? 'Другой'
     let amount = 0
     if (e.recurring) {
+      if (startOfMonth(parseISO(e.date)) > endOfMonth(month)) return
       amount = e.frequency === 'weekly' ? e.amount * 4.33
         : e.frequency === 'yearly' ? e.amount / 12
         : e.amount
@@ -219,6 +236,19 @@ export function getMonthlyDebtPayments(debts: Debt[]): number {
   return debts.reduce((s, d) => s + d.monthlyPayment, 0)
 }
 
+export function getMonthlyDebtPaymentsForMonth(debts: Debt[], month: Date): number {
+  const monthStart = startOfMonth(month)
+  const monthEnd = endOfMonth(month)
+  return debts.reduce((sum, debt) => {
+    const startsAt = debt.startDate ? parseISO(debt.startDate) : monthStart
+    const endsAt = debt.endDate ? parseISO(debt.endDate) : null
+    if (startsAt > monthEnd) return sum
+    if (endsAt && endsAt < monthStart) return sum
+    if (debt.remainingBalance <= 0) return sum
+    return sum + debt.monthlyPayment
+  }, 0)
+}
+
 export function getFreeMoneyAfterObligations(
   income: IncomeSource[],
   expenses: Expense[],
@@ -229,7 +259,7 @@ export function getFreeMoneyAfterObligations(
   const recurringExp = expenses
     .filter(e => e.recurring)
     .reduce((s, e) => s + (e.frequency === 'weekly' ? e.amount * 4.33 : e.frequency === 'yearly' ? e.amount / 12 : e.amount), 0)
-  const debtPayments = getMonthlyDebtPayments(debts)
+  const debtPayments = getMonthlyDebtPaymentsForMonth(debts, month)
   const oneTimeExp = expenses
     .filter(e => !e.recurring)
     .reduce((s, e) => {

@@ -342,9 +342,12 @@ function EarlyPaymentModal({ debt, onClose }: { debt: Debt; onClose: () => void 
   const handleConfirm = async () => {
     if (!valid) return
     setSaving(true)
-    await updateDebt(debt.id, { remainingBalance: newBalance })
-    setSaving(false)
-    onClose()
+    try {
+      await updateDebt(debt.id, { remainingBalance: newBalance })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -404,6 +407,7 @@ function DebtCard({ debt }: { debt: Debt }) {
   const [editOpen, setEditOpen] = useState(false)
   const [amortOpen, setAmortOpen] = useState(false)
   const [earlyPayOpen, setEarlyPayOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const metrics = useMemo(() => getDebtMetrics(debt), [debt])
   const pct = debt.totalAmount > 0 ? (1 - debt.remainingBalance / debt.totalAmount) * 100 : 0
@@ -460,7 +464,7 @@ function DebtCard({ debt }: { debt: Debt }) {
             <button
               className="text-slate-400 hover:text-red-400 transition-colors"
               onClick={() => {
-                if (confirm(`Удалить долг "${debt.name}"?`)) deleteDebt(debt.id)
+                if (confirm(`Удалить долг "${debt.name}"?`)) deleteDebt(debt.id).catch(() => undefined)
               }}
             >
               <Trash2 className="w-4 h-4" />
@@ -570,7 +574,13 @@ function DebtCard({ debt }: { debt: Debt }) {
       <Modal open={editOpen} onClose={() => setEditOpen(false)}>
         <DebtForm
           initial={debt}
-          onSave={(data) => { updateDebt(debt.id, data); setEditOpen(false) }}
+          onSave={(data) => {
+            setSaving(true)
+            updateDebt(debt.id, data)
+              .then(() => setEditOpen(false))
+              .catch(() => undefined)
+              .finally(() => setSaving(false))
+          }}
           onClose={() => setEditOpen(false)}
         />
       </Modal>
@@ -588,6 +598,7 @@ export default function Debts() {
   const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
   const [addOpen, setAddOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const totalDebt = debts.reduce((s, d) => s + d.remainingBalance, 0)
   const totalOverpayment = useMemo(
@@ -647,8 +658,11 @@ export default function Debts() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)}>
         <DebtForm
           onSave={(data) => {
+            setSaving(true)
             addDebt(data)
-            setAddOpen(false)
+              .then(() => setAddOpen(false))
+              .catch(() => undefined)
+              .finally(() => setSaving(false))
           }}
           onClose={() => setAddOpen(false)}
         />

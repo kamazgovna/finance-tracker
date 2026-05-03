@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useStore, useSettingsStore } from '../store/useStore'
 import { useMonthStore } from '../store/useMonthStore'
 import {
-  getMonthlyIncomeTotalForMonth, getMonthlyDebtPayments, getTotalDebt,
+  getMonthlyIncomeTotalForMonth, getMonthlyDebtPaymentsForMonth, getTotalDebt,
   getExpensesForMonth, getExpensesForMonthByCategory,
   get6MonthChartData, getUserBreakdown, getFreeMoneyAfterObligations,
 } from '../utils/calculations'
@@ -65,7 +65,7 @@ export default function Dashboard() {
   const monthlyIncome = useMemo(() => getMonthlyIncomeTotalForMonth(income, selectedMonth), [income, selectedMonth])
   const monthlyExpenses = useMemo(() => getExpensesForMonth(expenses, selectedMonth), [expenses, selectedMonth])
   const totalDebt = useMemo(() => getTotalDebt(debts), [debts])
-  const monthlyDebtPayments = useMemo(() => getMonthlyDebtPayments(debts), [debts])
+  const monthlyDebtPayments = useMemo(() => getMonthlyDebtPaymentsForMonth(debts, selectedMonth), [debts, selectedMonth])
   const freeMoney = useMemo(() => getFreeMoneyAfterObligations(income, expenses, debts, selectedMonth), [income, expenses, debts, selectedMonth])
 
   const expensesByCategory = useMemo(() => {

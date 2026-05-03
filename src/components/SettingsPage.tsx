@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useStore, useSettingsStore } from '../store/useStore'
 import { useAuth } from '../contexts/AuthContext'
-import { Settings, LogOut, AlertTriangle } from 'lucide-react'
+import { Settings, LogOut, AlertTriangle, Download, Upload } from 'lucide-react'
 
 const CURRENCIES = [
   { code: 'RUB', symbol: '₽', label: 'Российский рубль' },
@@ -15,12 +15,17 @@ const CURRENCIES = [
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettingsStore()
-  const { debts, income, expenses } = useStore()
+  const {
+    debts, income, expenses, budgets, goals,
+    addDebt, addIncome, addExpense, setBudget, addGoal, clearAllData,
+  } = useStore()
   const { user, signOut } = useAuth()
   const [confirmClear, setConfirmClear] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const handleExport = () => {
-    const data = { debts, income, expenses, settings, exportedAt: new Date().toISOString() }
+    const data = { debts, income, expenses, budgets, goals, settings, exportedAt: new Date().toISOString(), version: 1 }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -28,6 +33,55 @@ export default function SettingsPage() {
     a.download = `finance-backup-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleImport = async (file: File | undefined) => {
+    if (!file) return
+    if (!confirm('Импорт заменит текущие данные в облаке. Продолжить?')) return
+    setBusy(true)
+    try {
+      const raw = await file.text()
+      const data = JSON.parse(raw)
+      await clearAllData()
+      if (data.settings) updateSettings(data.settings)
+      for (const debt of data.debts ?? []) {
+        const { id: _id, createdBy: _createdBy, createdByName: _createdByName, ...payload } = debt
+        await addDebt(payload)
+      }
+      for (const source of data.income ?? []) {
+        const { id: _id, createdBy: _createdBy, createdByName: _createdByName, ...payload } = source
+        await addIncome(payload)
+      }
+      for (const expense of data.expenses ?? []) {
+        const { id: _id, createdBy: _createdBy, createdByName: _createdByName, ...payload } = expense
+        await addExpense(payload)
+      }
+      for (const budget of data.budgets ?? []) {
+        await setBudget(budget.category, Number(budget.monthlyLimit ?? 0))
+      }
+      for (const goal of data.goals ?? []) {
+        const { id: _id, ...payload } = goal
+        await addGoal(payload)
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка импорта')
+    } finally {
+      setBusy(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleClearAll = async () => {
+    if (!confirm('Точно удалить все финансовые данные из облака?')) return
+    setBusy(true)
+    try {
+      await clearAllData()
+      setConfirmClear(false)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка очистки')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -97,6 +151,16 @@ export default function SettingsPage() {
             <p className="text-xs text-slate-500 mt-1">Расходов</p>
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3 text-center">
+          <div className="bg-slate-800/50 rounded-xl p-3">
+            <p className="text-2xl font-bold text-slate-100">{budgets.length}</p>
+            <p className="text-xs text-slate-500 mt-1">Лимитов</p>
+          </div>
+          <div className="bg-slate-800/50 rounded-xl p-3">
+            <p className="text-2xl font-bold text-slate-100">{goals.length}</p>
+            <p className="text-xs text-slate-500 mt-1">Целей</p>
+          </div>
+        </div>
         <p className="text-xs text-slate-600 text-center">
           Данные синхронизируются между всеми устройствами
         </p>
@@ -105,10 +169,22 @@ export default function SettingsPage() {
       {/* Export */}
       <div className="card space-y-3">
         <h3 className="font-semibold text-slate-200">Резервная копия</h3>
-        <p className="text-xs text-slate-500">Скачать все данные в JSON</p>
-        <button className="btn-secondary flex items-center gap-2" onClick={handleExport}>
-          Экспорт JSON
-        </button>
+        <p className="text-xs text-slate-500">Скачать или восстановить все данные в JSON</p>
+        <div className="flex flex-wrap gap-3">
+          <button className="btn-secondary flex items-center gap-2" onClick={handleExport} disabled={busy}>
+            <Download className="h-4 w-4" /> Экспорт JSON
+          </button>
+          <button className="btn-secondary flex items-center gap-2" onClick={() => fileInputRef.current?.click()} disabled={busy}>
+            <Upload className="h-4 w-4" /> Импорт JSON
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => handleImport(e.target.files?.[0])}
+          />
+        </div>
       </div>
 
       {/* Danger zone */}
@@ -127,13 +203,10 @@ export default function SettingsPage() {
               <button className="btn-secondary" onClick={() => setConfirmClear(false)}>Отмена</button>
               <button
                 className="bg-red-500 hover:bg-red-400 text-white font-semibold px-4 py-2 rounded-xl transition-all"
-                onClick={() => {
-                  // Will be implemented if needed
-                  alert('Для полной очистки удалите записи вручную в Supabase')
-                  setConfirmClear(false)
-                }}
+                disabled={busy}
+                onClick={handleClearAll}
               >
-                Да, удалить
+                {busy ? 'Удаляю...' : 'Да, удалить'}
               </button>
             </div>
           </div>

@@ -131,17 +131,27 @@ export default function Goals() {
 
   const handleAdd = async (data: Omit<Goal, 'id'>) => {
     setSaving(true)
-    await addGoal(data)
-    setSaving(false)
-    setAddOpen(false)
+    try {
+      await addGoal(data)
+      setAddOpen(false)
+    } catch {
+      // Global store error banner shows the actual failure.
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleUpdate = async (data: Omit<Goal, 'id'>) => {
     if (!editItem) return
     setSaving(true)
-    await updateGoal(editItem.id, data)
-    setSaving(false)
-    setEditItem(null)
+    try {
+      await updateGoal(editItem.id, data)
+      setEditItem(null)
+    } catch {
+      // Global store error banner shows the actual failure.
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -203,7 +213,7 @@ export default function Goals() {
                     </button>
                     <button
                       className="text-slate-400 hover:text-red-400 transition-colors"
-                      onClick={() => { if (confirm(`Удалить цель "${goal.name}"?`)) deleteGoal(goal.id) }}
+                      onClick={() => { if (confirm(`Удалить цель "${goal.name}"?`)) deleteGoal(goal.id).catch(() => undefined) }}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
