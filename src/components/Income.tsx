@@ -1,19 +1,19 @@
 import { useState, useMemo } from 'react'
 import { useStore, useSettingsStore } from '../store/useStore'
 import { IncomeSource, IncomeCategory, INCOME_CATEGORY_LABELS, Frequency } from '../types'
-import { getIncomeForMonthByCategory, getMonthlyIncomeTotalForMonth, incomeToMonthlyAmount } from '../utils/calculations'
+import { filterIncomeForMonth, getIncomeForMonthByCategory, getMonthlyIncomeTotalForMonth, incomeToMonthlyAmount } from '../utils/calculations'
 import { useMonthStore } from '../store/useMonthStore'
 import MonthSelector from './MonthSelector'
 import { formatCurrency } from '../utils/formatters'
 import { Plus, Trash2, Edit2, X, TrendingUp } from 'lucide-react'
 
 const FREQUENCY_LABELS: Record<Frequency, string> = {
+  oneTime: 'Факт месяца',
   monthly: 'Ежемесячно',
   weekly: 'Еженедельно',
   biweekly: 'Раз в 2 недели',
   quarterly: 'Раз в квартал',
   yearly: 'Ежегодно',
-  oneTime: 'Разово',
 }
 
 const INCOME_CATEGORY_OPTIONS = Object.entries(INCOME_CATEGORY_LABELS).map(([v, l]) => ({ value: v as IncomeCategory, label: l }))
@@ -22,7 +22,7 @@ const FREQUENCY_OPTIONS = Object.entries(FREQUENCY_LABELS).map(([v, l]) => ({ va
 const emptyForm: Omit<IncomeSource, 'id'> = {
   name: '',
   amount: 0,
-  frequency: 'monthly',
+  frequency: 'oneTime',
   category: 'salary',
   date: new Date().toISOString().split('T')[0],
   notes: '',
@@ -68,7 +68,7 @@ function IncomeForm({ initial, onSave, onClose }: {
               value={form.amount || ''} onChange={e => set('amount', parseFloat(e.target.value) || 0)} />
           </div>
           <div>
-            <label className="label">Периодичность</label>
+            <label className="label">Тип дохода</label>
             <select className="select" value={form.frequency} onChange={e => set('frequency', e.target.value)}>
               {FREQUENCY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -81,9 +81,14 @@ function IncomeForm({ initial, onSave, onClose }: {
           </select>
         </div>
         <div>
-          <label className="label">{form.frequency === 'oneTime' ? 'Дата получения' : 'С какого месяца'}</label>
+          <label className="label">{form.frequency === 'oneTime' ? 'Месяц/дата факта' : 'С какого месяца повторять'}</label>
           <input className="input" type="date" value={form.date || ''}
             onChange={e => set('date', e.target.value)} />
+          <p className="mt-1 text-xs text-slate-500">
+            {form.frequency === 'oneTime'
+              ? 'Для плавающего оклада заноси каждый месяц отдельным фактом.'
+              : 'Повторяющийся доход будет попадать в каждый следующий месяц.'}
+          </p>
         </div>
         <div>
           <label className="label">Заметки</label>
@@ -120,6 +125,7 @@ export default function Income() {
   const [saving, setSaving] = useState(false)
 
   const monthlyTotal = useMemo(() => getMonthlyIncomeTotalForMonth(income, selectedMonth), [income, selectedMonth])
+  const visibleIncome = useMemo(() => filterIncomeForMonth(income, selectedMonth), [income, selectedMonth])
 
   // Group by category
   const byCategory = useMemo(() => {
@@ -168,7 +174,9 @@ export default function Income() {
       <div className="card bg-gradient-to-br from-emerald-500/10 to-slate-900 border-emerald-500/20">
         <p className="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-2">Итого поступлений</p>
         <p className="text-4xl font-black text-emerald-400">{formatCurrency(monthlyTotal, sym)}</p>
-        <p className="text-xs text-slate-500 mt-1">{income.length} {income.length === 1 ? 'источник' : income.length < 5 ? 'источника' : 'источников'}</p>
+        <p className="text-xs text-slate-500 mt-1">
+          {visibleIncome.length} {visibleIncome.length === 1 ? 'запись' : visibleIncome.length < 5 ? 'записи' : 'записей'} в выбранном месяце
+        </p>
       </div>
 
       {/* Category breakdown */}
@@ -215,7 +223,12 @@ export default function Income() {
         </div>
       ) : (
         <div className="space-y-3">
-          {income.map(source => {
+          {visibleIncome.length === 0 && (
+            <div className="card text-center text-sm text-slate-500">
+              В выбранном месяце доходов нет. Добавь факт дохода за этот месяц.
+            </div>
+          )}
+          {visibleIncome.map(source => {
             const monthly = incomeToMonthlyAmount(source, selectedMonth)
             const color = CATEGORY_COLORS[source.category]
             return (
@@ -230,6 +243,7 @@ export default function Income() {
                   <p className="font-medium text-slate-200">{source.name}</p>
                   <p className="text-xs text-slate-500">
                     {INCOME_CATEGORY_LABELS[source.category]} · {FREQUENCY_LABELS[source.frequency]}
+                    {source.date && ` · ${source.date}`}
                   </p>
                   {source.notes && <p className="text-xs text-slate-600 truncate">{source.notes}</p>}
                 </div>

@@ -133,6 +133,10 @@ export function getIncomeForMonthByCategory(sources: IncomeSource[], month: Date
   return byCategory
 }
 
+export function filterIncomeForMonth(sources: IncomeSource[], month: Date): IncomeSource[] {
+  return sources.filter((source) => incomeToMonthlyAmount(source, month) > 0)
+}
+
 export function getExpensesForMonth(expenses: Expense[], month: Date): number {
   return expenses.reduce((sum, e) => {
     if (e.recurring) {

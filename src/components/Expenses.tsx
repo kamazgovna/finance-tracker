@@ -140,9 +140,10 @@ export default function Expenses() {
 
   const byCategory = useMemo(() => {
     const byCat = getExpensesForMonthByCategory(expenses, selectedMonth)
+    const forMonth = filterExpensesForMonth(expenses, selectedMonth)
     const map: Record<string, { label: string; total: number; color: string; count: number }> = {}
     Object.entries(byCat).forEach(([cat, total]) => {
-      const matching = expenses.filter(e => e.category === cat)
+      const matching = forMonth.filter(e => e.category === cat)
       map[cat] = {
         label: EXPENSE_CATEGORY_LABELS[cat as ExpenseCategory] ?? cat,
         total,
@@ -166,13 +167,13 @@ export default function Expenses() {
   )
 
   const recurringTotal = useMemo(
-    () => expenses.filter(e => e.recurring).reduce((s, e) => {
+    () => filterExpensesForMonth(expenses, selectedMonth).filter(e => e.recurring).reduce((s, e) => {
       const monthly = e.frequency === 'weekly' ? e.amount * 4.33
         : e.frequency === 'yearly' ? e.amount / 12
         : e.amount
       return s + monthly
     }, 0),
-    [expenses]
+    [expenses, selectedMonth]
   )
 
   const handleSave = async (action: () => Promise<void>, close: () => void) => {
@@ -210,7 +211,7 @@ export default function Expenses() {
         <div className="card">
           <p className="text-xs text-amber-400 font-medium uppercase tracking-wider mb-2">Регулярные</p>
           <p className="text-3xl font-black text-amber-400">{formatCurrency(recurringTotal, sym)}</p>
-          <p className="text-xs text-slate-500 mt-1">{expenses.filter(e => e.recurring).length} повторяющихся</p>
+          <p className="text-xs text-slate-500 mt-1">{filtered.filter(e => e.recurring).length} повторяющихся в месяце</p>
         </div>
       </div>
 
