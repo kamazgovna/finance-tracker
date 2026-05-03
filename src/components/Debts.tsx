@@ -124,22 +124,42 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
   const { settings } = useSettingsStore()
   const sym = settings.currencySymbol
   const [mode, setMode] = useState<'monthly' | 'lump'>('monthly')
+  const [calcPayment, setCalcPayment] = useState(debt.monthlyPayment)
   const [extra, setExtra] = useState(0)
   const [lumpAmount, setLumpAmount] = useState(0)
   const [lumpMonth, setLumpMonth] = useState(1)
+
+  const suggestedPayment = useMemo(() => {
+    let months: number | undefined = debt.originalTermMonths
+    if (debt.endDate) {
+      const end = new Date(debt.endDate)
+      const now = new Date()
+      const m = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth())
+      if (m > 0) months = m
+    }
+    if (!months || debt.interestRate === 0) return null
+    const r = debt.interestRate / 100 / 12
+    return Math.round(debt.remainingBalance * r / (1 - Math.pow(1 + r, -months)))
+  }, [debt])
+
+  // Effective debt for calculation with overridden payment
+  const effectiveDebt = useMemo(() => ({
+    ...debt,
+    monthlyPayment: Math.max(1, calcPayment),
+  }), [debt, calcPayment])
 
   const lumpSum: LumpSum | undefined = mode === 'lump' && lumpAmount > 0
     ? { amount: lumpAmount, atMonth: lumpMonth }
     : undefined
 
   const rows = useMemo(
-    () => mode === 'monthly' ? calculateAmortization(debt, extra) : calculateAmortization(debt, 0, lumpSum),
-    [debt, extra, mode, lumpSum]
+    () => mode === 'monthly' ? calculateAmortization(effectiveDebt, extra) : calculateAmortization(effectiveDebt, 0, lumpSum),
+    [effectiveDebt, extra, mode, lumpSum]
   )
-  const base = useMemo(() => getDebtMetrics(debt, 0), [debt])
+  const base = useMemo(() => getDebtMetrics(effectiveDebt, 0), [effectiveDebt])
   const withChanges = useMemo(
-    () => mode === 'monthly' ? getDebtMetrics(debt, extra) : getDebtMetrics(debt, 0, lumpSum),
-    [debt, extra, mode, lumpSum]
+    () => mode === 'monthly' ? getDebtMetrics(effectiveDebt, extra) : getDebtMetrics(effectiveDebt, 0, lumpSum),
+    [effectiveDebt, extra, mode, lumpSum]
   )
 
   const interestSaved = base.totalInterest - withChanges.totalInterest
@@ -168,6 +188,32 @@ function AmortizationTable({ debt, onClose }: { debt: Debt; onClose: () => void 
             </div>
           </div>
         )}
+
+        {/* Payment override */}
+        <div className="bg-slate-800/40 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="label mb-0">Платёж для расчёта</label>
+            {suggestedPayment && (
+              <button
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                onClick={() => setCalcPayment(suggestedPayment)}
+              >
+                По договору ({debt.originalTermMonths} мес.) → {formatCurrency(suggestedPayment, sym)}
+              </button>
+            )}
+          </div>
+          <input
+            className="input"
+            type="number"
+            value={calcPayment || ''}
+            onChange={e => setCalcPayment(parseFloat(e.target.value) || debt.monthlyPayment)}
+          />
+          {calcPayment !== debt.monthlyPayment && (
+            <p className="text-xs text-slate-500">
+              Разница {formatCurrency(debt.monthlyPayment - calcPayment, sym)} — страховка/комиссии
+            </p>
+          )}
+        </div>
 
         {/* Mode toggle */}
         <div className="flex rounded-xl overflow-hidden border border-slate-700 text-sm font-medium">
